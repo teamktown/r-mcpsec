@@ -19,7 +19,7 @@ use humantime;
 #[derive(Parser)]
 #[command(name = "claude-token-monitor")]
 #[command(about = "A lightweight Rust client for Claude token usage monitoring")]
-#[command(version = "0.2.0")]
+#[command(version = "0.2.1")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,

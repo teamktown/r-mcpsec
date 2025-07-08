@@ -1,6 +1,6 @@
 # Claude Token Monitor - Rust Edition
 
-🧠 **v0.2.0** - A lightweight, high-performance Rust client for monitoring Claude AI token usage with enhanced Ratatui terminal interface.
+🧠 **v0.2.1** - A lightweight, high-performance Rust client for monitoring Claude AI token usage with enhanced Ratatui terminal interface.
 
 ## Features
 
@@ -347,6 +347,14 @@ MIT License - see LICENSE file for details.
 
 ## Changelog
 
+### v0.2.1
+- 🔧 Removed automatic fallback to mock mode (now requires --force-mock)
+- 📋 Enhanced Settings tab with comprehensive technical documentation
+- 📊 Added detailed system flow diagrams and architecture documentation
+- 🔍 Improved error messages with actionable guidance for credential setup
+- 💡 Added "How It Works" section explaining real code flow and calculations
+- 📚 Created docs/system-flow.md with complete technical diagrams
+
 ### v0.2.0
 - ✨ Enhanced Ratatui interface with tabbed navigation
 - 🔑 OAuth integration with Claude CLI credentials
@@ -373,5 +381,5 @@ MIT License - see LICENSE file for details.
 ---
 
 **Author:** Chris Phillips <chris@chrisphillips.ca>  
-**Version:** 0.2.0  
+**Version:** 0.2.1  
 **License:** MIT
