@@ -221,6 +221,48 @@ src/
     └── auth.rs         # Authentication commands
 ```
 
+## System Flow
+
+The application follows a structured data flow from startup to monitoring:
+
+```mermaid
+flowchart TD
+    A[Application Start] --> B[Parse CLI Arguments]
+    B --> C{--force-mock flag?}
+    C -->|Yes| D[Initialize Mock TokenMonitor]
+    C -->|No| E[Check Credentials]
+    
+    E --> F[Try CLI Args --api-key]
+    F --> G{API Key Found?}
+    G -->|Yes| H[Create ApiClient]
+    G -->|No| I[Try ~/.claude/.credentials.json]
+    I --> J{Credentials Found?}
+    J -->|Yes| H
+    J -->|No| K[Try Environment Variables]
+    K --> L{CLAUDE_API_KEY set?}
+    L -->|Yes| H
+    L -->|No| M[❌ Exit with Error]
+    
+    H --> N[Test API Connection]
+    N --> O{Connection OK?}
+    O -->|Yes| P[Create Real TokenMonitor]
+    O -->|No| M
+    
+    D --> Q[Load Data Directory]
+    P --> Q
+    Q --> R[SessionTracker loads sessions.json]
+    R --> S[Start Monitoring Loop]
+    S --> T[Fetch Current Token Usage]
+    T --> U[Calculate Metrics]
+    U --> V[Update UI]
+    V --> W[Save Session State]
+    W --> X{Continue?}
+    X -->|Yes| S
+    X -->|No| Y[Exit]
+```
+
+For detailed technical flow diagrams, see [docs/system-flow.md](docs/system-flow.md).
+
 ### Key Components
 
 - **TokenSession**: Represents a Claude usage session with metadata
@@ -283,12 +325,12 @@ The monitor now includes full Claude API integration with:
 
 ## Mock Mode
 
-For development and testing:
+For development and testing only:
 ```bash
-claude-token-monitor --mock
+claude-token-monitor --force-mock
 ```
 
-This uses simulated data instead of real API calls.
+This forces the use of simulated data instead of real API calls. The application will no longer automatically fallback to mock mode if API connection fails.
 
 ## Contributing
 

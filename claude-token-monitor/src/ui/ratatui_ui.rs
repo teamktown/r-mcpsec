@@ -225,6 +225,15 @@ impl RatatuiTerminalUI {
 
     /// Draw settings tab
     fn draw_settings_tab(frame: &mut Frame, area: Rect) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(7),  // Current Settings
+                Constraint::Min(15),    // Technical Details
+            ])
+            .split(area);
+
+        // Current Settings
         let settings_info = vec![
             "Default Plan: Pro".to_string(),
             "Update Interval: 3s".to_string(),
@@ -233,12 +242,12 @@ impl RatatuiTerminalUI {
             "Timezone: UTC".to_string(),
         ];
 
-        let items: Vec<ListItem> = settings_info
+        let settings_items: Vec<ListItem> = settings_info
             .iter()
             .map(|s| ListItem::new(Line::from(s.as_str())))
             .collect();
 
-        let list = List::new(items)
+        let settings_list = List::new(settings_items)
             .block(
                 Block::default()
                     .title("Current Settings")
@@ -246,7 +255,46 @@ impl RatatuiTerminalUI {
             )
             .style(Style::default().fg(Color::White));
 
-        frame.render_widget(list, area);
+        frame.render_widget(settings_list, chunks[0]);
+
+        // Technical Details
+        let technical_info = vec![
+            "📋 Technical Details:".to_string(),
+            "".to_string(),
+            "🔄 Data Flow:".to_string(),
+            "1. SessionTracker loads sessions from ~/.local/share/claude-token-monitor/sessions.json".to_string(),
+            "2. ApiClient checks credentials: CLI args → ~/.claude/.credentials.json → env vars".to_string(),
+            "3. TokenMonitor.fetch_current_token_usage() calls Claude API or uses mock data".to_string(),
+            "4. Background monitoring_loop runs every N seconds updating metrics".to_string(),
+            "".to_string(),
+            "📊 Calculations:".to_string(),
+            "• Usage Rate: tokens_used / time_elapsed (tokens/minute)".to_string(),
+            "• Efficiency: expected_rate / actual_rate (0.0-1.0)".to_string(),
+            "• Session Progress: time_elapsed / session_duration".to_string(),
+            "• Projected Depletion: remaining_tokens / usage_rate".to_string(),
+            "".to_string(),
+            "💾 File Operations:".to_string(),
+            "• Sessions persisted to JSON after each update".to_string(),
+            "• Config loaded from platform-specific directories".to_string(),
+            "• Credentials read from ~/.claude/.credentials.json (OAuth format)".to_string(),
+            "".to_string(),
+            "🔄 Updates: Real-time polling with configurable intervals".to_string(),
+        ];
+
+        let tech_items: Vec<ListItem> = technical_info
+            .iter()
+            .map(|s| ListItem::new(Line::from(s.as_str())))
+            .collect();
+
+        let tech_list = List::new(tech_items)
+            .block(
+                Block::default()
+                    .title("How It Works")
+                    .borders(Borders::ALL),
+            )
+            .style(Style::default().fg(Color::Cyan));
+
+        frame.render_widget(tech_list, chunks[1]);
     }
 
     /// Draw session information panel

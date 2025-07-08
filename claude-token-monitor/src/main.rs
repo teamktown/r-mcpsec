@@ -36,9 +36,9 @@ struct Cli {
     #[arg(short, long)]
     verbose: bool,
     
-    /// Use mock data instead of real API calls
+    /// Force use of mock data instead of real API calls (development only)
     #[arg(long)]
-    mock: bool,
+    force_mock: bool,
     
     /// API key for Claude API (can also use CLAUDE_API_KEY env var or ~/.claude/.credentials.json)
     #[arg(long)]
@@ -128,9 +128,9 @@ async fn main() -> Result<()> {
     // Load existing sessions
     session_service.write().await.load_sessions().await?;
     
-    // Initialize token monitor with API client if not in mock mode
-    let token_monitor = if cli.mock {
-        println!("🔧 Running in mock mode - using simulated data");
+    // Initialize token monitor with API client or fail if no credentials
+    let token_monitor = if cli.force_mock {
+        println!("🔧 Running in forced mock mode - using simulated data");
         TokenMonitor::new(Arc::clone(&session_service), cli.interval)
     } else {
         match initialize_api_client(cli.api_key).await {
@@ -143,9 +143,10 @@ async fn main() -> Result<()> {
                 )
             }
             Err(e) => {
-                println!("⚠️ Failed to connect to Claude API: {}", e);
-                println!("🔧 Falling back to mock mode");
-                TokenMonitor::new(Arc::clone(&session_service), cli.interval)
+                eprintln!("❌ Failed to connect to Claude API: {}", e);
+                eprintln!("💡 Tip: Use --force-mock for development/testing with simulated data");
+                eprintln!("🔧 Or set up credentials: https://docs.anthropic.com/claude/reference/getting-started");
+                std::process::exit(1);
             }
         }
     };
