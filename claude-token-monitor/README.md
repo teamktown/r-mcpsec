@@ -1,17 +1,19 @@
 # Claude Token Monitor - Rust Edition
 
-🧠 **Hive Mind Swarm Build** - A lightweight, high-performance Rust client for monitoring Claude AI token usage.
+🧠 **v0.2.0** - A lightweight, high-performance Rust client for monitoring Claude AI token usage with enhanced Ratatui terminal interface.
 
 ## Features
 
 - 🔥 **Real-time monitoring** with customizable update intervals
-- 📊 **Visual progress bars** and color-coded terminal UI
+- 📊 **Enhanced Ratatui UI** with interactive tabs and visual progress bars
 - 🤖 **Smart predictions** for token depletion timing
 - 📈 **Usage analytics** and efficiency scoring
 - 🔄 **Session management** with persistent storage
 - ⚡ **Lightning fast** - built with Rust for performance
 - 🛠️ **Configurable** plans and thresholds
 - 📱 **Cross-platform** support (Linux, macOS, Windows)
+- 🔑 **OAuth Integration** - Supports ~/.claude/.credentials.json
+- 🕐 **Human-friendly time formatting** using humantime library
 
 ## Installation
 
@@ -38,20 +40,28 @@ cargo install --path .
 
 ### Quick Start
 
-Start monitoring with default settings:
+Start monitoring with enhanced Ratatui interface (default):
 ```bash
 claude-token-monitor
+```
+
+Use basic terminal UI:
+```bash
+claude-token-monitor --basic-ui
 ```
 
 ### Commands
 
 #### Monitor in Real-time
 ```bash
-# Start monitoring with Pro plan
+# Start monitoring with Pro plan (uses Ratatui interface by default)
 claude-token-monitor monitor --plan pro
 
 # Monitor with custom update interval
 claude-token-monitor monitor --plan max5 --interval 5
+
+# Use basic terminal UI instead of Ratatui
+claude-token-monitor monitor --basic-ui
 ```
 
 #### Session Management
@@ -81,6 +91,18 @@ claude-token-monitor config --interval 2
 claude-token-monitor config --threshold 0.9
 ```
 
+#### Authentication
+```bash
+# Check authentication status
+claude-token-monitor auth status
+
+# Validate credentials
+claude-token-monitor auth validate
+
+# Get help with authentication
+claude-token-monitor auth help
+```
+
 ### Plan Types
 
 - **pro**: 40,000 tokens per 5-hour session
@@ -88,37 +110,66 @@ claude-token-monitor config --threshold 0.9
 - **max20**: 100,000 tokens per 5-hour session
 - **custom**: Specify custom token limit (e.g., `--plan 50000`)
 
-## Interface
+## Enhanced Ratatui Interface
 
-The terminal UI provides:
+The new enhanced interface provides tabbed navigation:
 
+### Tab 1: Overview
+- Real-time token usage with horizontal bar chart
+- Session progress gauge
+- Current usage statistics
+- Predictions and recommendations
+
+### Tab 2: Session Details
+- Session ID and metadata
+- Plan type and limits
+- Start time and reset time (human-readable format)
+- Status indicator
+
+### Tab 3: Analytics
+- Usage rate metrics
+- Efficiency scoring
+- Projected depletion time
+- Historical usage patterns
+
+### Tab 4: Help
+- Keyboard shortcuts
+- Available commands
+- Configuration options
+
+**Navigation:**
+- `Tab` / `Shift+Tab`: Switch between tabs
+- `q` / `Ctrl+C`: Quit application
+- `r`: Refresh data
+- `h`: Show help
+
+## Authentication
+
+### Claude CLI Integration
+
+The monitor automatically detects and uses Claude CLI credentials from:
 ```
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                            Claude Token Monitor                               ║
-║                        Rust Edition - Hive Mind Build                        ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
-
-Session Information:
-  Plan Type: Pro
-  Status: ACTIVE
-  Session ID: a1b2c3d4
-  Started: 2025-07-08 01:30:00 UTC
-  Resets: 2025-07-08 06:30:00 UTC
-
-Token Usage Progress:
-  ████████████████████████████████████████████████░░ 85.2%
-  34,080 / 40,000 tokens used
-
-Usage Statistics:
-  Usage Rate: 125.50 tokens/minute
-  Session Progress: 67.3%
-  Efficiency Score: 0.92
-
-Predictions:
-  Projected Depletion: 2h 15m (04:45:00 UTC)
-
-Controls: [Q]uit | [R]efresh | [Ctrl+C] Exit
+~/.claude/.credentials.json
 ```
+
+### Environment Variables
+
+You can also set:
+```bash
+export CLAUDE_API_KEY="your-api-key-here"
+```
+
+### Command Line
+
+Pass API key directly:
+```bash
+claude-token-monitor --api-key "your-api-key-here"
+```
+
+The application will check credential sources in this order:
+1. Command line `--api-key` flag
+2. Claude CLI credentials file
+3. Environment variables
 
 ## Configuration
 
@@ -155,13 +206,19 @@ src/
 ├── main.rs              # CLI interface and command handling
 ├── lib.rs               # Library exports
 ├── models/
-│   └── mod.rs          # Data structures (TokenSession, UsageMetrics, etc.)
+│   ├── mod.rs          # Data structures (TokenSession, UsageMetrics, etc.)
+│   ├── api.rs          # API response models
+│   └── credentials.rs  # OAuth credential management
 ├── services/
 │   ├── mod.rs          # Service traits and interfaces
 │   ├── session_tracker.rs  # Session management and persistence
-│   └── token_monitor.rs     # Real-time monitoring logic
-└── ui/
-    └── mod.rs          # Terminal UI and display components
+│   ├── token_monitor.rs     # Real-time monitoring logic
+│   └── api_client.rs        # Claude API client with OAuth
+├── ui/
+│   ├── mod.rs          # Basic terminal UI
+│   └── ratatui_ui.rs   # Enhanced Ratatui interface
+└── commands/
+    └── auth.rs         # Authentication commands
 ```
 
 ### Key Components
@@ -169,8 +226,9 @@ src/
 - **TokenSession**: Represents a Claude usage session with metadata
 - **SessionTracker**: Manages session lifecycle and persistence
 - **TokenMonitor**: Real-time monitoring with async updates
-- **TerminalUI**: Full-screen terminal interface with progress bars
-- **UsageMetrics**: Analytics and predictions for token consumption
+- **RatatuiTerminalUI**: Enhanced tabbed interface with interactive elements
+- **ApiClient**: OAuth-enabled Claude API client
+- **CredentialManager**: Handles multiple credential sources
 
 ## Performance
 
@@ -179,6 +237,7 @@ Built with Rust for maximum performance:
 - **Fast startup**: Sub-second initialization
 - **Concurrent**: Async/await for non-blocking operations
 - **Cross-platform**: Works on Linux, macOS, and Windows
+- **Real-time updates**: Efficient polling with configurable intervals
 
 ## Development
 
@@ -206,27 +265,30 @@ cargo clippy
 cargo fmt
 ```
 
+### Check compilation
+
+```bash
+cargo check
+```
+
 ## API Integration
 
-Currently uses simulated data for demonstration. To integrate with Claude's actual API:
+The monitor now includes full Claude API integration with:
 
-1. Add your API key to environment variables
-2. Implement the `fetch_current_token_usage()` method in `TokenMonitor`
-3. Add proper error handling for API failures
+- **OAuth credentials** support
+- **Retry logic** with exponential backoff
+- **Rate limiting** awareness
+- **Error handling** for API failures
+- **Connection testing** on startup
 
-Example API integration:
-```rust
-async fn fetch_current_token_usage(&self) -> Result<u32> {
-    let client = reqwest::Client::new();
-    let response = client.get("https://api.anthropic.com/v1/usage")
-        .header("Authorization", format!("Bearer {}", api_key))
-        .send()
-        .await?;
-    
-    let usage_data: TokenUsageResponse = response.json().await?;
-    Ok(usage_data.tokens_used)
-}
+## Mock Mode
+
+For development and testing:
+```bash
+claude-token-monitor --mock
 ```
+
+This uses simulated data instead of real API calls.
 
 ## Contributing
 
@@ -241,12 +303,33 @@ async fn fetch_current_token_usage(&self) -> Result<u32> {
 
 MIT License - see LICENSE file for details.
 
+## Changelog
+
+### v0.2.0
+- ✨ Enhanced Ratatui interface with tabbed navigation
+- 🔑 OAuth integration with Claude CLI credentials
+- 🕐 Human-friendly time formatting with humantime library
+- 📊 Interactive horizontal bar charts and gauges
+- 🎨 Professional UI with color coding and real-time updates
+- 🔧 Improved CLI argument structure (--basic-ui flag)
+- 📈 Enhanced session analytics and predictions
+- 🛠️ Better error handling and connection testing
+
+### v0.1.0
+- 🚀 Initial release with basic monitoring
+- 📊 Simple terminal UI with progress bars
+- 🔄 Session management and persistence
+- 🤖 Token usage predictions
+
 ## Acknowledgments
 
 - Inspired by [Claude-Code-Usage-Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor)
-- Built with the Hive Mind Swarm collective intelligence system
+- Built with Ratatui for enhanced terminal interfaces
 - Powered by Rust and tokio for high performance
+- Humantime library for user-friendly time formatting
 
 ---
 
-**🧠 Built by the Hive Mind Swarm - Collective Intelligence in Action**
+**Author:** Chris Phillips <chris@chrisphillips.ca>  
+**Version:** 0.2.0  
+**License:** MIT

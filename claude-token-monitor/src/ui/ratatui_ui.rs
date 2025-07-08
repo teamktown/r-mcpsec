@@ -19,6 +19,7 @@ use ratatui::{
 use std::io;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
+use humantime;
 
 /// Enhanced terminal UI using Ratatui
 pub struct RatatuiTerminalUI {
@@ -442,8 +443,8 @@ impl RatatuiTerminalUI {
             format!("Tokens Used: {}", session.tokens_used),
             format!("Token Limit: {}", session.tokens_limit),
             format!("Usage: {:.1}%", (session.tokens_used as f64 / session.tokens_limit as f64) * 100.0),
-            format!("Started: {}", session.start_time.format("%Y-%m-%d %H:%M:%S")),
-            format!("Resets: {}", session.reset_time.format("%Y-%m-%d %H:%M:%S")),
+            format!("Started: {}", humantime::format_rfc3339(session.start_time.into())),
+            format!("Resets: {}", humantime::format_rfc3339(session.reset_time.into())),
             format!("Status: {}", if session.is_active { "Active" } else { "Inactive" }),
         ];
 
@@ -472,7 +473,7 @@ impl RatatuiTerminalUI {
             
             vec![
                 format!("Projected Depletion: {}h {}m", hours, minutes),
-                format!("Depletion Time: {}", depletion_time.format("%H:%M:%S UTC")),
+                format!("Depletion Time: {}", humantime::format_rfc3339((*depletion_time).into())),
                 format!("Usage Rate: {:.2} tokens/min", metrics.usage_rate),
                 format!("Efficiency: {:.2}", metrics.efficiency_score),
                 format!("Session Progress: {:.1}%", metrics.session_progress * 100.0),

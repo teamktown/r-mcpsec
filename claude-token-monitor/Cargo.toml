@@ -1,9 +1,9 @@
 [package]
 name = "claude-token-monitor"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Lightweight Rust client for Claude token usage monitoring"
-authors = ["Hive Mind Swarm <hive@collective.ai>"]
+authors = ["Chris Phillips <chris@chrisphillips.ca>"]
 license = "MIT"
 repository = "https://github.com/teamktown/claude-token-monitor"
 keywords = ["claude", "token", "monitoring", "cli", "ai"]
@@ -16,6 +16,7 @@ serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }
 reqwest = { version = "0.11", features = ["json"] }
 chrono = { version = "0.4", features = ["serde"] }
+humantime = "2.1"
 crossterm = "0.27"
 colored = "2.0"
 ratatui = "0.28"

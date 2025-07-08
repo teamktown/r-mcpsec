@@ -14,11 +14,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use anyhow::Result;
+use humantime;
 
 #[derive(Parser)]
 #[command(name = "claude-token-monitor")]
 #[command(about = "A lightweight Rust client for Claude token usage monitoring")]
-#[command(version = "0.1.0")]
+#[command(version = "0.2.0")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -295,8 +296,8 @@ async fn show_status(session_service: Arc<RwLock<SessionTracker>>) -> Result<()>
             println!("  Plan: {:?}", session.plan_type);
             println!("  Tokens Used: {} / {}", session.tokens_used, session.tokens_limit);
             println!("  Usage: {:.1}%", (session.tokens_used as f64 / session.tokens_limit as f64) * 100.0);
-            println!("  Started: {}", session.start_time.format("%Y-%m-%d %H:%M:%S UTC"));
-            println!("  Resets: {}", session.reset_time.format("%Y-%m-%d %H:%M:%S UTC"));
+            println!("  Started: {}", humantime::format_rfc3339(session.start_time.into()));
+            println!("  Resets: {}", humantime::format_rfc3339(session.reset_time.into()));
             println!("  Status: {}", if session.is_active { "ACTIVE" } else { "INACTIVE" });
         }
         None => {
@@ -318,7 +319,7 @@ async fn create_session(
     println!("  ID: {}", session.id);
     println!("  Plan: {:?}", session.plan_type);
     println!("  Limit: {} tokens", session.tokens_limit);
-    println!("  Resets: {}", session.reset_time.format("%Y-%m-%d %H:%M:%S UTC"));
+    println!("  Resets: {}", humantime::format_rfc3339(session.reset_time.into()));
     
     Ok(())
 }
@@ -367,7 +368,7 @@ async fn show_history(
             &session.id[..8],
             format!("{:?}", session.plan_type),
             format!("{}/{} ({:.1}%)", session.tokens_used, session.tokens_limit, usage_percent),
-            session.start_time.format("%Y-%m-%d %H:%M:%S"),
+            humantime::format_rfc3339(session.start_time.into()),
             status
         );
     }
