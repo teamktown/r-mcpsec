@@ -45,6 +45,10 @@ struct Cli {
     /// Explain in detail how this tool works and what it monitors
     #[arg(long)]
     explain_how_this_works: bool,
+    
+    /// Show about information including version, author, and contributors
+    #[arg(long)]
+    about: bool,
 }
 
 #[derive(Subcommand)]
@@ -89,7 +93,12 @@ enum Commands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     
-    // Handle explain flag first
+    // Handle special flags first
+    if cli.about {
+        show_about();
+        return Ok(());
+    }
+    
     if cli.explain_how_this_works {
         explain_how_this_works();
         return Ok(());
@@ -409,4 +418,48 @@ fn load_or_create_config(data_dir: &PathBuf) -> Result<UserConfig> {
         std::fs::write(&config_path, content)?;
         Ok(config)
     }
+}
+
+/// Display about information including version, author, and contributors
+fn show_about() {
+    use colored::Colorize;
+    
+    println!("{}", "📱 Claude Token Monitor".bright_cyan().bold());
+    println!();
+    println!("{}", "📋 Version Information:".bright_yellow().bold());
+    println!("  Version: {}", "v0.2.2".bright_green());
+    println!("  Name: {}", "claude-token-monitor".bright_white());
+    println!("  Description: A lightweight Rust client for Claude token usage monitoring");
+    println!();
+    
+    println!("{}", "👨‍💻 Author:".bright_yellow().bold());
+    println!("  Chris Phillips");
+    println!("  Email: {}", "chris@adiuco.com".bright_blue());
+    println!();
+    
+    println!("{}", "🛠️ Built Using:".bright_yellow().bold());
+    println!("  • {}", "ruv-swarm".bright_magenta().bold());
+    println!("  • Rust programming language");
+    println!("  • Tokio async runtime");
+    println!("  • Ratatui terminal UI framework");
+    println!();
+    
+    println!("{}", "🙏 Attribution & Contributors:".bright_yellow().bold());
+    println!("  Original concept by: {}", "@Maciek-roboblog".bright_cyan());
+    println!("  Based on: {}", "Claude-Code-Usage-Monitor".bright_white());
+    println!("  Repository: {}", "https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor".bright_blue());
+    println!();
+    println!("  🌟 Contributors to the original project:");
+    println!("     See: https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor?tab=readme-ov-file#-contributors");
+    println!();
+    
+    println!("{}", "🔗 This Rust Implementation:".bright_yellow().bold());
+    println!("  Repository: {}", "https://github.com/teamktown/r-mcpsec/tree/main/claude-token-monitor".bright_blue());
+    println!("  License: MIT");
+    println!();
+    
+    println!("{}", "💡 Usage:".bright_green().bold());
+    println!("  claude-token-monitor --help");
+    println!("  claude-token-monitor --explain-how-this-works");
+    println!("  claude-token-monitor monitor --plan pro");
 }

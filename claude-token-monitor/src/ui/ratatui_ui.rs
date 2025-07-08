@@ -84,10 +84,10 @@ impl RatatuiTerminalUI {
                         return Ok(true);
                     }
                     KeyCode::Tab => {
-                        self.selected_tab = (self.selected_tab + 1) % 4;
+                        self.selected_tab = (self.selected_tab + 1) % 5;
                     }
                     KeyCode::BackTab => {
-                        self.selected_tab = if self.selected_tab == 0 { 3 } else { self.selected_tab - 1 };
+                        self.selected_tab = if self.selected_tab == 0 { 4 } else { self.selected_tab - 1 };
                     }
                     KeyCode::Up => {
                         self.scroll_offset = self.scroll_offset.saturating_sub(1);
@@ -132,6 +132,7 @@ impl RatatuiTerminalUI {
             1 => Self::draw_charts_tab(frame, chunks[2], metrics),
             2 => Self::draw_session_tab(frame, chunks[2], metrics),
             3 => Self::draw_settings_tab(frame, chunks[2]),
+            4 => Self::draw_about_tab(frame, chunks[2]),
             _ => {}
         }
 
@@ -154,7 +155,7 @@ impl RatatuiTerminalUI {
 
     /// Draw tab navigation
     fn draw_tabs(frame: &mut Frame, area: Rect, selected_tab: usize) {
-        let tab_titles = vec!["Overview", "Charts", "Session", "Settings"];
+        let tab_titles = vec!["Overview", "Charts", "Session", "Settings", "About"];
         let tabs = Tabs::new(tab_titles)
             .block(Block::default().borders(Borders::ALL).title("Navigation"))
             .style(Style::default().fg(Color::White))
@@ -292,6 +293,82 @@ impl RatatuiTerminalUI {
             .style(Style::default().fg(Color::Cyan));
 
         frame.render_widget(tech_list, chunks[1]);
+    }
+
+    /// Draw about tab with version, author, and attribution information
+    fn draw_about_tab(frame: &mut Frame, area: Rect) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(8),  // Version & Author
+                Constraint::Min(12),    // Attribution & Contributors
+            ])
+            .split(area);
+
+        // Version and Author Information
+        let version_info = vec![
+            "📱 Claude Token Monitor v0.2.2".to_string(),
+            "".to_string(),
+            "👨‍💻 Author: Chris Phillips".to_string(),
+            "📧 Email: chris@adiuco.com".to_string(),
+            "🛠️  Built using: ruv-swarm".to_string(),
+            "⚙️  Language: Rust with Tokio + Ratatui".to_string(),
+        ];
+
+        let version_items: Vec<ListItem> = version_info
+            .iter()
+            .map(|s| ListItem::new(Line::from(s.as_str())))
+            .collect();
+
+        let version_list = List::new(version_items)
+            .block(
+                Block::default()
+                    .title("Version & Author")
+                    .borders(Borders::ALL),
+            )
+            .style(Style::default().fg(Color::White));
+
+        frame.render_widget(version_list, chunks[0]);
+
+        // Attribution and Contributors
+        let attribution_info = vec![
+            "🙏 Attribution & Contributors:".to_string(),
+            "".to_string(),
+            "📚 Original Concept:".to_string(),
+            "   • Created by: @Maciek-roboblog".to_string(),
+            "   • Project: Claude-Code-Usage-Monitor".to_string(),
+            "   • Repository: github.com/Maciek-roboblog/Claude-Code-Usage-Monitor".to_string(),
+            "".to_string(),
+            "🌟 Contributors to Original Project:".to_string(),
+            "   See: github.com/Maciek-roboblog/Claude-Code-Usage-Monitor".to_string(),
+            "        #-contributors section for full list".to_string(),
+            "".to_string(),
+            "🦀 This Rust Implementation:".to_string(),
+            "   • Repository: github.com/teamktown/r-mcpsec/claude-token-monitor".to_string(),
+            "   • License: MIT".to_string(),
+            "   • Refactored for file-based monitoring approach".to_string(),
+            "   • Enhanced with real-time file watching capabilities".to_string(),
+            "".to_string(),
+            "💡 Usage Tips:".to_string(),
+            "   • Use --about flag for this information in CLI".to_string(),
+            "   • Use --explain-how-this-works for technical details".to_string(),
+            "   • Compatible with Claude Code's JSONL output files".to_string(),
+        ];
+
+        let attribution_items: Vec<ListItem> = attribution_info
+            .iter()
+            .map(|s| ListItem::new(Line::from(s.as_str())))
+            .collect();
+
+        let attribution_list = List::new(attribution_items)
+            .block(
+                Block::default()
+                    .title("Attribution & Contributors")
+                    .borders(Borders::ALL),
+            )
+            .style(Style::default().fg(Color::Cyan));
+
+        frame.render_widget(attribution_list, chunks[1]);
     }
 
     /// Draw session information panel
