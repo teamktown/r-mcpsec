@@ -16,14 +16,12 @@ pub use ratatui_ui::RatatuiTerminalUI;
 
 /// Terminal UI for displaying token usage
 pub struct TerminalUI {
-    config: UserConfig,
     should_exit: bool,
 }
 
 impl TerminalUI {
-    pub fn new(config: UserConfig) -> Self {
+    pub fn new(_config: UserConfig) -> Self {
         Self {
-            config,
             should_exit: false,
         }
     }

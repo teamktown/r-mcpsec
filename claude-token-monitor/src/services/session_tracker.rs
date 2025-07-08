@@ -66,9 +66,8 @@ impl SessionTracker {
     }
 }
 
-#[async_trait::async_trait]
 impl SessionService for SessionTracker {
-    async fn create_session(&mut self, plan_type: PlanType) -> Result<TokenSession> {
+    fn create_session(&mut self, plan_type: PlanType) -> impl std::future::Future<Output = Result<TokenSession>> + Send {
         let session_id = Uuid::new_v4().to_string();
         let now = Utc::now();
         let reset_time = now + Duration::hours(plan_type.session_duration_hours() as i64);
@@ -85,52 +84,75 @@ impl SessionService for SessionTracker {
         };
         
         self.sessions.insert(session_id.clone(), session.clone());
-        self.save_sessions().await?;
         
-        log::info!("Created new session: {} with plan {:?}", session_id, plan_type);
-        Ok(session)
+        async move {
+            log::info!("Created new session: {} with plan {:?}", session_id, plan_type);
+            Ok(session)
+        }
     }
 
-    async fn update_session(&mut self, session_id: &str, tokens_used: u32) -> Result<()> {
-        let session = self.sessions.get_mut(session_id)
-            .ok_or_else(|| anyhow!("Session not found: {}", session_id))?;
+    fn update_session(&mut self, session_id: &str, tokens_used: u32) -> impl std::future::Future<Output = Result<()>> + Send {
+        let session_id = session_id.to_string();
+        let mut updated_session = None;
         
-        session.tokens_used = tokens_used;
-        
-        // Check if session should be ended due to time limit
-        if Utc::now() > session.reset_time {
-            session.is_active = false;
-            session.end_time = Some(session.reset_time);
+        if let Some(session) = self.sessions.get_mut(&session_id) {
+            session.tokens_used = tokens_used;
+            
+            // Check if session should be ended due to time limit
+            if Utc::now() > session.reset_time {
+                session.is_active = false;
+                session.end_time = Some(session.reset_time);
+            }
+            
+            updated_session = Some(session.clone());
         }
         
-        self.save_sessions().await?;
-        Ok(())
+        async move {
+            if updated_session.is_some() {
+                Ok(())
+            } else {
+                Err(anyhow!("Session not found: {}", session_id))
+            }
+        }
     }
 
-    async fn end_session(&mut self, session_id: &str) -> Result<()> {
-        let session = self.sessions.get_mut(session_id)
-            .ok_or_else(|| anyhow!("Session not found: {}", session_id))?;
+    fn end_session(&mut self, session_id: &str) -> impl std::future::Future<Output = Result<()>> + Send {
+        let session_id = session_id.to_string();
+        let mut session_ended = false;
         
-        session.is_active = false;
-        session.end_time = Some(Utc::now());
+        if let Some(session) = self.sessions.get_mut(&session_id) {
+            session.is_active = false;
+            session.end_time = Some(Utc::now());
+            session_ended = true;
+        }
         
-        self.save_sessions().await?;
-        log::info!("Ended session: {}", session_id);
-        Ok(())
+        async move {
+            if session_ended {
+                log::info!("Ended session: {}", session_id);
+                Ok(())
+            } else {
+                Err(anyhow!("Session not found: {}", session_id))
+            }
+        }
     }
 
-    async fn get_active_session(&self) -> Result<Option<TokenSession>> {
+    fn get_active_session(&self) -> impl std::future::Future<Output = Result<Option<TokenSession>>> + Send {
         let active_session = self.sessions.values()
             .find(|session| session.is_active && Utc::now() <= session.reset_time)
             .cloned();
         
-        Ok(active_session)
+        async move {
+            Ok(active_session)
+        }
     }
 
-    async fn get_session_history(&self, limit: usize) -> Result<Vec<TokenSession>> {
+    fn get_session_history(&self, limit: usize) -> impl std::future::Future<Output = Result<Vec<TokenSession>>> + Send {
         let mut sessions: Vec<TokenSession> = self.sessions.values().cloned().collect();
         sessions.sort_by(|a, b| b.start_time.cmp(&a.start_time));
         sessions.truncate(limit);
-        Ok(sessions)
+        
+        async move {
+            Ok(sessions)
+        }
     }
 }

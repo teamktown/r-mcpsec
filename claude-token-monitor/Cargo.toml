@@ -1,6 +1,6 @@
 [package]
 name = "claude-token-monitor"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 description = "Lightweight Rust client for Claude token usage monitoring"
 authors = ["Chris Phillips <chris@chrisphillips.ca>"]
@@ -14,7 +14,6 @@ clap = { version = "4.0", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }
-reqwest = { version = "0.11", features = ["json"] }
 chrono = { version = "0.4", features = ["serde"] }
 humantime = "2.1"
 crossterm = "0.27"
@@ -25,10 +24,10 @@ anyhow = "1.0"
 log = "0.4"
 env_logger = "0.10"
 uuid = { version = "1.0", features = ["v4"] }
-async-trait = "0.1"
+notify = "6.0"
+walkdir = "2.0"
 rand = "0.8"
+futures = "0.3"
 
 [dev-dependencies]
-tokio-test = "0.4"
 tempfile = "3.0"
-mockall = "0.11"

@@ -2,13 +2,11 @@ use clap::{Parser, Subcommand};
 use claude_token_monitor::{
     models::*,
     services::{
-        SessionService, TokenMonitorService, 
+        SessionService,
         session_tracker::SessionTracker, 
-        token_monitor::TokenMonitor,
-        api_client::ApiClient
+        file_monitor::{FileBasedTokenMonitor, explain_how_this_works},
     },
     ui::{TerminalUI, RatatuiTerminalUI},
-    commands::auth,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,7 +17,7 @@ use humantime;
 #[derive(Parser)]
 #[command(name = "claude-token-monitor")]
 #[command(about = "A lightweight Rust client for Claude token usage monitoring")]
-#[command(version = "0.2.1")]
+#[command(version = "0.2.2")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -36,17 +34,17 @@ struct Cli {
     #[arg(short, long)]
     verbose: bool,
     
-    /// Force use of mock data instead of real API calls (development only)
+    /// Force use of mock data instead of reading JSONL files (development only)
     #[arg(long)]
     force_mock: bool,
-    
-    /// API key for Claude API (can also use CLAUDE_API_KEY env var or ~/.claude/.credentials.json)
-    #[arg(long)]
-    api_key: Option<String>,
     
     /// Use basic terminal UI instead of enhanced Ratatui interface
     #[arg(long)]
     basic_ui: bool,
+    
+    /// Explain in detail how this tool works and what it monitors
+    #[arg(long)]
+    explain_how_this_works: bool,
 }
 
 #[derive(Subcommand)]
@@ -85,26 +83,17 @@ enum Commands {
         #[arg(long)]
         threshold: Option<f64>,
     },
-    /// Authentication commands
-    Auth {
-        #[command(subcommand)]
-        auth_command: AuthCommands,
-    },
-}
-
-#[derive(Subcommand)]
-enum AuthCommands {
-    /// Check authentication status
-    Status,
-    /// Show authentication help
-    Help,
-    /// Validate current credentials
-    Validate,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    
+    // Handle explain flag first
+    if cli.explain_how_this_works {
+        explain_how_this_works();
+        return Ok(());
+    }
     
     // Initialize logging
     let log_level = if cli.verbose { "debug" } else { "info" };
@@ -128,25 +117,29 @@ async fn main() -> Result<()> {
     // Load existing sessions
     session_service.write().await.load_sessions().await?;
     
-    // Initialize token monitor with API client or fail if no credentials
-    let token_monitor = if cli.force_mock {
+    // Initialize file-based token monitor
+    let file_monitor = if cli.force_mock {
         println!("🔧 Running in forced mock mode - using simulated data");
-        TokenMonitor::new(Arc::clone(&session_service), cli.interval)
+        None
     } else {
-        match initialize_api_client(cli.api_key).await {
-            Ok(api_client) => {
-                println!("✅ Connected to Claude API");
-                TokenMonitor::with_api_client(
-                    Arc::clone(&session_service),
-                    cli.interval,
-                    api_client
-                )
+        match FileBasedTokenMonitor::new() {
+            Ok(mut monitor) => {
+                println!("🔍 Scanning Claude usage files...");
+                monitor.scan_usage_files().await?;
+                println!("✅ Found {} usage entries", monitor.entry_count());
+                if let Some((start, end)) = monitor.entry_time_range() {
+                    println!("📊 Data range: {} to {}", 
+                        humantime::format_rfc3339(start.into()),
+                        humantime::format_rfc3339(end.into())
+                    );
+                }
+                Some(monitor)
             }
             Err(e) => {
-                eprintln!("❌ Failed to connect to Claude API: {}", e);
+                eprintln!("⚠️ Failed to initialize file monitor: {}", e);
                 eprintln!("💡 Tip: Use --force-mock for development/testing with simulated data");
-                eprintln!("🔧 Or set up credentials: https://docs.anthropic.com/claude/reference/getting-started");
-                std::process::exit(1);
+                eprintln!("📁 Make sure Claude Code has created usage files in ~/.claude/projects/");
+                None
             }
         }
     };
@@ -155,7 +148,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Some(Commands::Monitor { plan }) => {
             let plan_type = parse_plan_type(&plan)?;
-            run_monitor(session_service, token_monitor, plan_type, config, cli.basic_ui).await?;
+            run_monitor(session_service, file_monitor, plan_type, config, cli.basic_ui, cli.force_mock).await?;
         }
         Some(Commands::Status) => {
             show_status(session_service).await?;
@@ -173,82 +166,26 @@ async fn main() -> Result<()> {
         Some(Commands::Config { plan, interval, threshold }) => {
             configure_monitor(data_dir, plan, interval, threshold).await?;
         }
-        Some(Commands::Auth { auth_command }) => {
-            match auth_command {
-                AuthCommands::Status => {
-                    auth::check_auth_status().await?;
-                }
-                AuthCommands::Help => {
-                    auth::show_auth_help();
-                }
-                AuthCommands::Validate => {
-                    auth::validate_credentials().await?;
-                }
-            }
-        }
         None => {
             // Default to monitoring with Pro plan
             let plan_type = PlanType::Pro;
-            run_monitor(session_service, token_monitor, plan_type, config, cli.basic_ui).await?;
+            run_monitor(session_service, file_monitor, plan_type, config, cli.basic_ui, cli.force_mock).await?;
         }
     }
     
     Ok(())
 }
 
-async fn initialize_api_client(api_key: Option<String>) -> Result<ApiClient> {
-    // Show available credential sources
-    println!("🔍 Checking available credential sources:");
-    for source_info in ApiClient::check_credential_sources() {
-        println!("  {}", source_info);
-    }
-    println!();
-
-    let client = if let Some(key) = api_key {
-        // Use provided API key directly
-        println!("🔑 Using API key provided via --api-key flag");
-        let credential_source = CredentialSource::Direct(key);
-        ApiClient::with_credentials(credential_source)?
-    } else {
-        // Try Claude CLI credentials first, then fallback to environment variables
-        match ApiClient::from_claude_cli() {
-            Ok(client) => {
-                println!("✅ Using Claude CLI credentials from ~/.claude/.credentials.json");
-                
-                // Show credential info if available
-                if let Ok(creds) = CredentialManager::check_claude_cli_credentials() {
-                    println!("📋 Credential Info: {}", creds.get_info_for_logging());
-                }
-                
-                client
-            }
-            Err(e) => {
-                println!("⚠️ Claude CLI credentials not available: {}", e);
-                println!("🔄 Falling back to environment variables...");
-                ApiClient::from_env()?
-            }
-        }
-    };
-    
-    // Test the connection
-    if client.test_connection().await? {
-        println!("🔗 API connection test successful");
-        println!("📊 Config: {}", client.get_config_info());
-    } else {
-        return Err(anyhow::anyhow!("API connection test failed"));
-    }
-    
-    Ok(client)
-}
 
 async fn run_monitor(
     session_service: Arc<RwLock<SessionTracker>>,
-    mut token_monitor: TokenMonitor<SessionTracker>,
+    file_monitor: Option<FileBasedTokenMonitor>,
     plan_type: PlanType,
     config: UserConfig,
     use_basic_ui: bool,
+    use_mock: bool,
 ) -> Result<()> {
-    println!("🧠 Claude Token Monitor - Hive Mind Edition");
+    println!("🧠 Claude Token Monitor - File-Based Edition");
     println!("Starting monitoring with plan: {:?}", plan_type);
     
     // Ensure we have an active session
@@ -259,14 +196,20 @@ async fn run_monitor(
         session_service_write.create_session(plan_type).await?;
     }
     
-    // Start monitoring
-    token_monitor.start_monitoring().await?;
+    // Get the current session
+    let session = session_service.read().await.get_active_session().await?
+        .ok_or_else(|| anyhow::anyhow!("No active session available"))?;
     
-    // Wait for initial metrics
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-    
-    // Get current metrics
-    let metrics = token_monitor.get_current_usage().await?;
+    // Calculate metrics
+    let metrics = if use_mock {
+        // Generate mock metrics for development
+        generate_mock_metrics(session)
+    } else if let Some(ref monitor) = file_monitor {
+        monitor.calculate_metrics(&session)
+    } else {
+        eprintln!("❌ No file monitor available and not in mock mode");
+        std::process::exit(1);
+    };
     
     // Initialize and run UI based on CLI flag (Ratatui is default)
     if use_basic_ui {
@@ -282,8 +225,29 @@ async fn run_monitor(
         ratatui_ui.cleanup()?;
     }
     
-    token_monitor.stop_monitoring().await?;
     Ok(())
+}
+
+fn generate_mock_metrics(session: TokenSession) -> UsageMetrics {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    
+    let mock_tokens_used = rng.gen_range(1000..5000);
+    let usage_rate = rng.gen_range(50.0..200.0);
+    let session_progress = rng.gen_range(0.1..0.8);
+    let efficiency_score = rng.gen_range(0.6..1.0);
+    
+    let mut updated_session = session;
+    updated_session.tokens_used = mock_tokens_used;
+    
+    UsageMetrics {
+        current_session: updated_session,
+        usage_rate,
+        session_progress,
+        efficiency_score,
+        projected_depletion: Some(chrono::Utc::now() + chrono::Duration::hours(2)),
+        usage_history: Vec::new(),
+    }
 }
 
 async fn show_status(session_service: Arc<RwLock<SessionTracker>>) -> Result<()> {

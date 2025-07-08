@@ -17,7 +17,7 @@ use ratatui::{
     Frame, Terminal,
 };
 use std::io;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::time::sleep;
 use humantime;
 
@@ -25,15 +25,13 @@ use humantime;
 pub struct RatatuiTerminalUI {
     terminal: Terminal<CrosstermBackend<io::Stdout>>,
     should_exit: bool,
-    config: UserConfig,
-    last_update: Instant,
     selected_tab: usize,
     scroll_offset: usize,
 }
 
 impl RatatuiTerminalUI {
     /// Create new Ratatui terminal UI
-    pub fn new(config: UserConfig) -> Result<Self> {
+    pub fn new(_config: UserConfig) -> Result<Self> {
         enable_raw_mode()?;
         let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen)?;
@@ -43,8 +41,6 @@ impl RatatuiTerminalUI {
         Ok(Self {
             terminal,
             should_exit: false,
-            config,
-            last_update: Instant::now(),
             selected_tab: 0,
             scroll_offset: 0,
         })
@@ -262,23 +258,24 @@ impl RatatuiTerminalUI {
             "📋 Technical Details:".to_string(),
             "".to_string(),
             "🔄 Data Flow:".to_string(),
-            "1. SessionTracker loads sessions from ~/.local/share/claude-token-monitor/sessions.json".to_string(),
-            "2. ApiClient checks credentials: CLI args → ~/.claude/.credentials.json → env vars".to_string(),
-            "3. TokenMonitor.fetch_current_token_usage() calls Claude API or uses mock data".to_string(),
-            "4. Background monitoring_loop runs every N seconds updating metrics".to_string(),
+            "1. FileBasedTokenMonitor scans ~/.claude/projects/**/*.jsonl files".to_string(),
+            "2. Parses token usage entries from Claude Code's JSONL logs".to_string(),
+            "3. SessionTracker manages sessions in ~/.local/share/claude-token-monitor/".to_string(),
+            "4. File watcher monitors for new usage data in real-time".to_string(),
             "".to_string(),
             "📊 Calculations:".to_string(),
-            "• Usage Rate: tokens_used / time_elapsed (tokens/minute)".to_string(),
+            "• Usage Rate: total_tokens / time_elapsed (tokens/minute)".to_string(),
             "• Efficiency: expected_rate / actual_rate (0.0-1.0)".to_string(),
-            "• Session Progress: time_elapsed / session_duration".to_string(),
+            "• Session Progress: time_elapsed / session_duration (5 hours)".to_string(),
             "• Projected Depletion: remaining_tokens / usage_rate".to_string(),
             "".to_string(),
             "💾 File Operations:".to_string(),
-            "• Sessions persisted to JSON after each update".to_string(),
-            "• Config loaded from platform-specific directories".to_string(),
-            "• Credentials read from ~/.claude/.credentials.json (OAuth format)".to_string(),
+            "• Reads .jsonl files written by Claude Code during conversations".to_string(),
+            "• No API calls or authentication required".to_string(),
+            "• Sessions persisted locally for history tracking".to_string(),
+            "• Watches file system for real-time updates".to_string(),
             "".to_string(),
-            "🔄 Updates: Real-time polling with configurable intervals".to_string(),
+            "🔄 Updates: File system watching + periodic scanning".to_string(),
         ];
 
         let tech_items: Vec<ListItem> = technical_info

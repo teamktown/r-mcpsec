@@ -1,19 +1,17 @@
 pub mod session_tracker;
 pub mod token_monitor;
-pub mod api_client;
+pub mod file_monitor;
 
 use crate::models::*;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use async_trait::async_trait;
 
 /// Core service trait for token monitoring
-#[async_trait]
 pub trait TokenMonitorService {
-    async fn start_monitoring(&mut self) -> Result<()>;
-    async fn stop_monitoring(&mut self) -> Result<()>;
-    async fn get_current_usage(&self) -> Result<UsageMetrics>;
-    async fn update_usage(&mut self) -> Result<()>;
+    fn start_monitoring(&mut self) -> Result<()>;
+    fn stop_monitoring(&mut self) -> Result<()>;
+    fn get_current_usage(&self) -> Result<UsageMetrics>;
+    fn update_usage(&mut self) -> Result<()>;
 }
 
 /// Service for managing user configuration
@@ -24,13 +22,12 @@ pub trait ConfigService {
 }
 
 /// Service for session tracking and management
-#[async_trait]
-pub trait SessionService {
-    async fn create_session(&mut self, plan_type: PlanType) -> Result<TokenSession>;
-    async fn update_session(&mut self, session_id: &str, tokens_used: u32) -> Result<()>;
-    async fn end_session(&mut self, session_id: &str) -> Result<()>;
-    async fn get_active_session(&self) -> Result<Option<TokenSession>>;
-    async fn get_session_history(&self, limit: usize) -> Result<Vec<TokenSession>>;
+pub trait SessionService: Send + Sync {
+    fn create_session(&mut self, plan_type: PlanType) -> impl std::future::Future<Output = Result<TokenSession>> + Send;
+    fn update_session(&mut self, session_id: &str, tokens_used: u32) -> impl std::future::Future<Output = Result<()>> + Send;
+    fn end_session(&mut self, session_id: &str) -> impl std::future::Future<Output = Result<()>> + Send;
+    fn get_active_session(&self) -> impl std::future::Future<Output = Result<Option<TokenSession>>> + Send;
+    fn get_session_history(&self, limit: usize) -> impl std::future::Future<Output = Result<Vec<TokenSession>>> + Send;
 }
 
 /// Service for analytics and predictions
