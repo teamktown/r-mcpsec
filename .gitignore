@@ -138,7 +138,9 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-./claude-token-monitor/target/
+./claude-token-monitor/target*
+claude-token-monitor/target*
+
 .claude/
 .hive-mind/
 memory/

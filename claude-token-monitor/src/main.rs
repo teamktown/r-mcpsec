@@ -43,9 +43,9 @@ struct Cli {
     #[arg(long)]
     api_key: Option<String>,
     
-    /// Use enhanced Ratatui interface instead of basic terminal UI
+    /// Use basic terminal UI instead of enhanced Ratatui interface
     #[arg(long)]
-    ratatui: bool,
+    basic_ui: bool,
 }
 
 #[derive(Subcommand)]
@@ -153,7 +153,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Some(Commands::Monitor { plan }) => {
             let plan_type = parse_plan_type(&plan)?;
-            run_monitor(session_service, token_monitor, plan_type, config).await?;
+            run_monitor(session_service, token_monitor, plan_type, config, cli.basic_ui).await?;
         }
         Some(Commands::Status) => {
             show_status(session_service).await?;
@@ -187,7 +187,7 @@ async fn main() -> Result<()> {
         None => {
             // Default to monitoring with Pro plan
             let plan_type = PlanType::Pro;
-            run_monitor(session_service, token_monitor, plan_type, config).await?;
+            run_monitor(session_service, token_monitor, plan_type, config, cli.basic_ui).await?;
         }
     }
     
@@ -244,6 +244,7 @@ async fn run_monitor(
     mut token_monitor: TokenMonitor<SessionTracker>,
     plan_type: PlanType,
     config: UserConfig,
+    use_basic_ui: bool,
 ) -> Result<()> {
     println!("🧠 Claude Token Monitor - Hive Mind Edition");
     println!("Starting monitoring with plan: {:?}", plan_type);
@@ -265,18 +266,18 @@ async fn run_monitor(
     // Get current metrics
     let metrics = token_monitor.get_current_usage().await?;
     
-    // Initialize and run UI based on CLI flag
-    if std::env::args().any(|arg| arg == "--ratatui") {
-        // Use enhanced Ratatui interface
-        let mut ratatui_ui = RatatuiTerminalUI::new(config)?;
-        ratatui_ui.run(&metrics).await?;
-        ratatui_ui.cleanup()?;
-    } else {
+    // Initialize and run UI based on CLI flag (Ratatui is default)
+    if use_basic_ui {
         // Use basic terminal UI
         let mut ui = TerminalUI::new(config);
         ui.init()?;
         ui.run(&metrics).await?;
         ui.cleanup()?;
+    } else {
+        // Use enhanced Ratatui interface (default)
+        let mut ratatui_ui = RatatuiTerminalUI::new(config)?;
+        ratatui_ui.run(&metrics).await?;
+        ratatui_ui.cleanup()?;
     }
     
     token_monitor.stop_monitoring().await?;
