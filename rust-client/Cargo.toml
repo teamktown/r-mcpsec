@@ -1,0 +1,51 @@
+[package]
+name = "rust-client"
+version = "0.1.0"
+edition = "2021"
+description = "Lightweight Rust client for AI coordination and swarm orchestration"
+authors = ["Hive Mind Team <team@hivemind.dev>"]
+license = "MIT"
+repository = "https://github.com/teamktown/rust-client"
+keywords = ["ai", "swarm", "orchestration", "coordination", "claude"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+# Core dependencies
+clap = { version = "4.0", features = ["derive", "env"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0"
+thiserror = "1.0"
+config = "0.13"
+dirs = "5.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Optional dependencies for enhanced features
+colored = { version = "2.0", optional = true }
+indicatif = { version = "0.17", optional = true }
+serde_yaml = { version = "0.9", optional = true }
+toml = { version = "0.8", optional = true }
+crossterm = { version = "0.27", optional = true }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = "3.0"
+tokio-test = "0.4"
+
+[features]
+default = ["colored", "indicatif", "toml", "crossterm"]
+full = ["colored", "indicatif", "serde_yaml", "toml", "crossterm"]
+minimal = []
+
+[[bin]]
+name = "rust-client"
+path = "src/main.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

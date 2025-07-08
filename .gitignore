@@ -142,4 +142,7 @@ vite.config.ts.timestamp-*
 .claude/
 .hive-mind/
 memory/
+coordination/
+claude-flow*
+CLAUDE.md 
 
