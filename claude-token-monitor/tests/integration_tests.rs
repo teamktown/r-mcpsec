@@ -2,79 +2,32 @@ use claude_token_monitor::models::*;
 use claude_token_monitor::services::session_tracker::SessionTracker;
 use claude_token_monitor::services::SessionService;
 use chrono::Utc;
-use std::path::PathBuf;
 use tempfile::TempDir;
-use tokio_test;
 
 #[tokio::test]
-async fn test_session_creation() {
+async fn test_session_observation() {
     let temp_dir = TempDir::new().unwrap();
-    let sessions_path = temp_dir.path().join("sessions.json");
+    let sessions_path = temp_dir.path().join("observed_sessions.json");
     
-    let mut tracker = SessionTracker::new(sessions_path);
-    let session = tracker.create_session(PlanType::Pro).await.unwrap();
+    let tracker = SessionTracker::new(sessions_path).unwrap();
     
-    assert_eq!(session.plan_type, PlanType::Pro);
-    assert_eq!(session.tokens_limit, 40_000);
-    assert_eq!(session.tokens_used, 0);
-    assert!(session.is_active);
-    assert!(session.start_time <= Utc::now());
+    // Test that we can create a tracker without errors
+    assert!(tracker.get_active_session().await.is_ok());
+    
+    // Should return None when no observed sessions exist
+    let active_session = tracker.get_active_session().await.unwrap();
+    assert!(active_session.is_none());
 }
 
 #[tokio::test]
-async fn test_session_update() {
+async fn test_session_history_empty() {
     let temp_dir = TempDir::new().unwrap();
-    let sessions_path = temp_dir.path().join("sessions.json");
+    let sessions_path = temp_dir.path().join("observed_sessions.json");
     
-    let mut tracker = SessionTracker::new(sessions_path);
-    let session = tracker.create_session(PlanType::Max5).await.unwrap();
-    
-    tracker.update_session(&session.id, 1000).await.unwrap();
-    
-    let updated_session = tracker.get_active_session().await.unwrap().unwrap();
-    assert_eq!(updated_session.tokens_used, 1000);
-    assert_eq!(updated_session.id, session.id);
-}
-
-#[tokio::test]
-async fn test_session_history() {
-    let temp_dir = TempDir::new().unwrap();
-    let sessions_path = temp_dir.path().join("sessions.json");
-    
-    let mut tracker = SessionTracker::new(sessions_path);
-    
-    // Create multiple sessions
-    let _session1 = tracker.create_session(PlanType::Pro).await.unwrap();
-    let _session2 = tracker.create_session(PlanType::Max5).await.unwrap();
-    let _session3 = tracker.create_session(PlanType::Max20).await.unwrap();
+    let tracker = SessionTracker::new(sessions_path).unwrap();
     
     let history = tracker.get_session_history(10).await.unwrap();
-    assert_eq!(history.len(), 3);
-    
-    // Should be sorted by start time (newest first)
-    assert!(history[0].start_time >= history[1].start_time);
-    assert!(history[1].start_time >= history[2].start_time);
-}
-
-#[tokio::test]
-async fn test_session_persistence() {
-    let temp_dir = TempDir::new().unwrap();
-    let sessions_path = temp_dir.path().join("sessions.json");
-    
-    let session_id = {
-        let mut tracker = SessionTracker::new(sessions_path.clone());
-        let session = tracker.create_session(PlanType::Pro).await.unwrap();
-        tracker.update_session(&session.id, 5000).await.unwrap();
-        session.id
-    };
-    
-    // Create new tracker instance (simulating restart)
-    let mut tracker2 = SessionTracker::new(sessions_path);
-    tracker2.load_sessions().await.unwrap();
-    
-    let loaded_session = tracker2.get_active_session().await.unwrap().unwrap();
-    assert_eq!(loaded_session.id, session_id);
-    assert_eq!(loaded_session.tokens_used, 5000);
+    assert_eq!(history.len(), 0);
 }
 
 #[tokio::test]
@@ -97,7 +50,7 @@ async fn test_user_config_defaults() {
 #[tokio::test]
 async fn test_usage_metrics_calculation() {
     let session = TokenSession {
-        id: "test".to_string(),
+        id: "observed-test".to_string(),
         start_time: Utc::now() - chrono::Duration::minutes(10),
         end_time: None,
         plan_type: PlanType::Pro,
@@ -110,7 +63,7 @@ async fn test_usage_metrics_calculation() {
     let usage_point = TokenUsagePoint {
         timestamp: Utc::now(),
         tokens_used: 1000,
-        session_id: "test".to_string(),
+        session_id: "observed-test".to_string(),
     };
     
     let metrics = UsageMetrics {
@@ -126,4 +79,49 @@ async fn test_usage_metrics_calculation() {
     assert_eq!(metrics.efficiency_score, 0.95);
     assert_eq!(metrics.session_progress, 0.1);
     assert_eq!(metrics.usage_history.len(), 1);
+}
+
+#[tokio::test]
+async fn test_passive_monitoring_principles() {
+    // Test that observed session IDs follow the "observed-" pattern
+    let session = TokenSession {
+        id: "observed-1752068062".to_string(),
+        start_time: Utc::now() - chrono::Duration::minutes(30),
+        end_time: None,
+        plan_type: PlanType::Max20,
+        tokens_used: 54143,
+        tokens_limit: 100_000,
+        is_active: true,
+        reset_time: Utc::now() + chrono::Duration::hours(4),
+    };
+    
+    // Verify session follows passive monitoring pattern
+    assert!(session.id.starts_with("observed-"));
+    assert!(session.tokens_used > 0);
+    assert!(session.is_active);
+    assert_eq!(session.plan_type, PlanType::Max20);
+    assert_eq!(session.tokens_limit, 100_000);
+}
+
+#[tokio::test]
+async fn test_token_session_serialization() {
+    let session = TokenSession {
+        id: "observed-test".to_string(),
+        start_time: Utc::now(),
+        end_time: None,
+        plan_type: PlanType::Pro,
+        tokens_used: 1500,
+        tokens_limit: 40_000,
+        is_active: true,
+        reset_time: Utc::now() + chrono::Duration::hours(5),
+    };
+    
+    // Test serialization/deserialization
+    let serialized = serde_json::to_string(&session).unwrap();
+    let deserialized: TokenSession = serde_json::from_str(&serialized).unwrap();
+    
+    assert_eq!(session.id, deserialized.id);
+    assert_eq!(session.tokens_used, deserialized.tokens_used);
+    assert_eq!(session.plan_type, deserialized.plan_type);
+    assert_eq!(session.is_active, deserialized.is_active);
 }

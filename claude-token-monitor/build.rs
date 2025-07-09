@@ -1,9 +1,11 @@
 use std::process::Command;
 
 fn main() {
-    // Set build timestamp
+    // Set build timestamp with both human readable and build ID
     let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string();
+    let build_id = chrono::Utc::now().format("%Y%m%d%H%M%S").to_string();
     println!("cargo:rustc-env=CLAUDE_TOKEN_MONITOR_BUILD_TIME={}", timestamp);
+    println!("cargo:rustc-env=CLAUDE_TOKEN_MONITOR_BUILD_ID={}", build_id);
     
     // Rerun if git changes
     println!("cargo:rerun-if-changed=.git/HEAD");

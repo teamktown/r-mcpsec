@@ -388,10 +388,61 @@ impl FileBasedTokenMonitor {
         })
     }
 
-    /// Calculate current usage metrics from loaded entries
-    pub fn calculate_metrics(&self, session: &TokenSession) -> UsageMetrics {
+    /// Derive session information from JSONL entries (passive observation)
+    pub fn derive_current_session(&self) -> Option<TokenSession> {
+        if self.usage_entries.is_empty() {
+            return None;
+        }
+        
         let now = Utc::now();
-        let session_start = session.start_time;
+        let session_duration = chrono::Duration::hours(5);
+        
+        // Find the most recent entry to determine the current session
+        let latest_entry = self.usage_entries.last()?;
+        
+        // Calculate session start time based on 5-hour windows
+        let session_start = latest_entry.timestamp;
+        let reset_time = session_start + session_duration;
+        
+        // Check if we're still within the session window
+        let is_active = now <= reset_time;
+        
+        // Calculate total tokens used in this session
+        let total_tokens_used: u32 = self.usage_entries
+            .iter()
+            .filter(|entry| entry.timestamp >= session_start && entry.timestamp <= now)
+            .map(|entry| entry.usage.total_tokens())
+            .sum();
+        
+        // Determine plan type based on usage patterns (best guess from observed data)
+        let plan_type = if total_tokens_used > 20_000 {
+            PlanType::Max20
+        } else if total_tokens_used > 10_000 || self.usage_entries.len() > 20 {
+            PlanType::Pro
+        } else {
+            PlanType::Max5
+        };
+        
+        // Generate a session ID based on the session start time (deterministic)
+        let session_id = format!("observed-{}", session_start.timestamp());
+        
+        Some(TokenSession {
+            id: session_id,
+            start_time: session_start,
+            end_time: if is_active { None } else { Some(reset_time) },
+            plan_type: plan_type.clone(),
+            tokens_used: total_tokens_used,
+            tokens_limit: plan_type.default_limit(),
+            is_active,
+            reset_time,
+        })
+    }
+    
+    /// Calculate current usage metrics from observed data (passive monitoring)
+    pub fn calculate_metrics(&self) -> Option<UsageMetrics> {
+        let current_session = self.derive_current_session()?;
+        let now = Utc::now();
+        let session_start = current_session.start_time;
         let one_hour_ago = now - chrono::Duration::hours(1);
         
         // Filter entries for current session (within session timeframe)
@@ -435,7 +486,7 @@ impl FileBasedTokenMonitor {
         
         // Calculate efficiency score
         let efficiency_score = if session_progress > 0.0 {
-            let expected_rate = session.tokens_limit as f64 / session_duration_minutes;
+            let expected_rate = current_session.tokens_limit as f64 / session_duration_minutes;
             let actual_rate = if usage_rate > 0.0 { usage_rate } else { 0.1 };
             (expected_rate / actual_rate).min(1.0).max(0.0)
         } else {
@@ -444,7 +495,7 @@ impl FileBasedTokenMonitor {
         
         // Calculate projected depletion
         let projected_depletion = if usage_rate > 0.0 {
-            let remaining_tokens = session.tokens_limit.saturating_sub(total_tokens_used);
+            let remaining_tokens = current_session.tokens_limit.saturating_sub(total_tokens_used);
             let minutes_remaining = remaining_tokens as f64 / usage_rate;
             Some(now + chrono::Duration::minutes(minutes_remaining as i64))
         } else {
@@ -452,17 +503,17 @@ impl FileBasedTokenMonitor {
         };
         
         // Update session with actual token count
-        let mut updated_session = session.clone();
+        let mut updated_session = current_session;
         updated_session.tokens_used = total_tokens_used;
         
-        UsageMetrics {
+        Some(UsageMetrics {
             current_session: updated_session,
             usage_rate,
             session_progress,
             efficiency_score,
             projected_depletion,
             usage_history: Vec::new(), // Will be populated in future iterations
-        }
+        })
     }
 
     /// Get the number of usage entries loaded
@@ -480,6 +531,113 @@ impl FileBasedTokenMonitor {
                 self.usage_entries.last().unwrap().timestamp,
             ))
         }
+    }
+
+    /// Get file sources analysis with token counts
+    pub fn get_file_sources_analysis(&self) -> Vec<(String, usize, u32)> {
+        // Group entries by file path (approximated from data patterns)
+        let mut file_analysis = Vec::new();
+        
+        // Since we don't track specific file paths, we'll analyze by patterns
+        // This is a reasonable approximation based on typical usage
+        if !self.usage_entries.is_empty() {
+            let total_tokens: u32 = self.usage_entries.iter().map(|e| e.usage.total_tokens()).sum();
+            let total_entries = self.usage_entries.len();
+            
+            // Group by time periods to simulate different sessions/files
+            let mut current_group_start = self.usage_entries[0].timestamp;
+            let mut current_group_tokens = 0u32;
+            let mut current_group_entries = 0usize;
+            let mut group_index = 1;
+            
+            for entry in &self.usage_entries {
+                let time_diff = entry.timestamp.signed_duration_since(current_group_start);
+                
+                // If more than 1 hour gap, consider it a new "file" or session
+                if time_diff > chrono::Duration::hours(1) {
+                    if current_group_entries > 0 {
+                        file_analysis.push((
+                            format!("session-{}.jsonl", group_index),
+                            current_group_entries,
+                            current_group_tokens
+                        ));
+                    }
+                    current_group_start = entry.timestamp;
+                    current_group_tokens = 0;
+                    current_group_entries = 0;
+                    group_index += 1;
+                }
+                
+                current_group_tokens += entry.usage.total_tokens();
+                current_group_entries += 1;
+            }
+            
+            // Add the final group
+            if current_group_entries > 0 {
+                file_analysis.push((
+                    format!("session-{}.jsonl", group_index),
+                    current_group_entries,
+                    current_group_tokens
+                ));
+            }
+            
+            // If we have no groups (continuous usage), create a single entry
+            if file_analysis.is_empty() {
+                file_analysis.push((
+                    "current-session.jsonl".to_string(),
+                    total_entries,
+                    total_tokens
+                ));
+            }
+        }
+        
+        file_analysis
+    }
+
+    /// Get model usage breakdown
+    pub fn get_model_usage_breakdown(&self) -> Vec<(String, u32, usize)> {
+        use std::collections::HashMap;
+        
+        let mut model_usage: HashMap<String, (u32, usize)> = HashMap::new();
+        
+        for entry in &self.usage_entries {
+            let model = entry.model.clone().unwrap_or_else(|| "unknown".to_string());
+            let tokens = entry.usage.total_tokens();
+            
+            let (total_tokens, count) = model_usage.entry(model).or_insert((0, 0));
+            *total_tokens += tokens;
+            *count += 1;
+        }
+        
+        let mut result: Vec<(String, u32, usize)> = model_usage
+            .into_iter()
+            .map(|(model, (tokens, count))| (model, tokens, count))
+            .collect();
+        
+        result.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by tokens descending
+        result
+    }
+
+    /// Get token type breakdown
+    pub fn get_token_type_breakdown(&self) -> (u32, u32, u32, u32) {
+        let mut input_tokens = 0u32;
+        let mut output_tokens = 0u32;
+        let mut cache_creation_tokens = 0u32;
+        let mut cache_read_tokens = 0u32;
+        
+        for entry in &self.usage_entries {
+            input_tokens += entry.usage.input_tokens;
+            output_tokens += entry.usage.output_tokens;
+            cache_creation_tokens += entry.usage.cache_creation_input_tokens.unwrap_or(0);
+            cache_read_tokens += entry.usage.cache_read_input_tokens.unwrap_or(0);
+        }
+        
+        (input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens)
+    }
+
+    /// Get monitored paths
+    pub fn get_monitored_paths(&self) -> &[PathBuf] {
+        &self.claude_data_paths
     }
 
     /// Start file system watcher for real-time updates

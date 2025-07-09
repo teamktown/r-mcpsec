@@ -121,24 +121,36 @@ impl<T: SessionService + Send + Sync + 'static> TokenMonitor<T> {
         let metrics = if self.use_mock_data {
             self.generate_mock_metrics().await?
         } else {
-            let session_service = self.session_service.read().await;
-            let active_session = session_service.get_active_session().await?;
-            
-            let session = match active_session {
-                Some(session) => session,
-                None => {
-                    log::warn!("No active session found");
-                    return Ok(());
-                }
-            };
-            drop(session_service);
-
             // Scan for new usage files
             let mut file_monitor = self.file_monitor.write().await;
             file_monitor.scan_usage_files().await?;
             
-            // Calculate metrics using file data
-            file_monitor.calculate_metrics(&session)
+            // Calculate metrics using file data (passive monitoring)
+            file_monitor.calculate_metrics().unwrap_or_else(|| {
+                // If no data available, create placeholder metrics using derived session if available
+                let placeholder_session = file_monitor.derive_current_session().unwrap_or_else(|| {
+                    // Create minimal session if no data exists
+                    TokenSession {
+                        id: "no-data".to_string(),
+                        start_time: chrono::Utc::now(),
+                        end_time: None,
+                        plan_type: PlanType::Pro,
+                        tokens_used: 0,
+                        tokens_limit: 40000,
+                        is_active: false,
+                        reset_time: chrono::Utc::now() + chrono::Duration::hours(5),
+                    }
+                });
+                
+                UsageMetrics {
+                    current_session: placeholder_session,
+                    usage_rate: 0.0,
+                    session_progress: 0.0,
+                    efficiency_score: 1.0,
+                    projected_depletion: None,
+                    usage_history: Vec::new(),
+                }
+            })
         };
 
         let mut current_metrics = self.current_metrics.write().await;

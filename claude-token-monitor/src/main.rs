@@ -13,6 +13,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use anyhow::Result;
 use humantime;
+use chrono::Utc;
 
 #[derive(Parser)]
 #[command(name = "claude-token-monitor")]
@@ -53,23 +54,15 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Start real-time monitoring
+    /// Start real-time monitoring (passive observation)
     Monitor {
-        /// Plan type to use
+        /// Plan type hint for calculations
         #[arg(short, long, default_value = "pro")]
         plan: String,
     },
-    /// Show current session status
+    /// Show current observed session status
     Status,
-    /// Create a new session
-    Create {
-        /// Plan type for new session
-        #[arg(short, long, default_value = "pro")]
-        plan: String,
-    },
-    /// End current session
-    End,
-    /// Show session history
+    /// Show observed session history
     History {
         /// Number of sessions to show
         #[arg(short, long, default_value = "10")]
@@ -77,7 +70,7 @@ enum Commands {
     },
     /// Configure the monitor
     Config {
-        /// Set default plan
+        /// Set default plan hint
         #[arg(long)]
         plan: Option<String>,
         /// Set update interval
@@ -119,12 +112,12 @@ async fn main() -> Result<()> {
     // Load configuration
     let config = load_or_create_config(&data_dir)?;
     
-    // Initialize services
-    let session_tracker = SessionTracker::new(data_dir.join("sessions.json"));
+    // Initialize services (passive observation)
+    let session_tracker = SessionTracker::new(data_dir.join("observed_sessions.json"))?;
     let session_service = Arc::new(RwLock::new(session_tracker));
     
-    // Load existing sessions
-    session_service.write().await.load_sessions().await?;
+    // Update observed sessions from JSONL data
+    session_service.write().await.update_observed_sessions().await?;
     
     // Initialize file-based token monitor
     let file_monitor = if cli.force_mock {
@@ -162,13 +155,6 @@ async fn main() -> Result<()> {
         Some(Commands::Status) => {
             show_status(session_service).await?;
         }
-        Some(Commands::Create { plan }) => {
-            let plan_type = parse_plan_type(&plan)?;
-            create_session(session_service, plan_type).await?;
-        }
-        Some(Commands::End) => {
-            end_session(session_service).await?;
-        }
         Some(Commands::History { limit }) => {
             show_history(session_service, limit).await?;
         }
@@ -197,24 +183,45 @@ async fn run_monitor(
     println!("🧠 Claude Token Monitor - File-Based Edition");
     println!("Starting monitoring with plan: {:?}", plan_type);
     
-    // Ensure we have an active session
-    let active_session = session_service.read().await.get_active_session().await?;
-    if active_session.is_none() {
-        println!("No active session found. Creating new session...");
-        let mut session_service_write = session_service.write().await;
-        session_service_write.create_session(plan_type).await?;
-    }
+    // Update observed sessions from JSONL data (passive monitoring)
+    session_service.write().await.update_observed_sessions().await?;
     
-    // Get the current session
-    let session = session_service.read().await.get_active_session().await?
-        .ok_or_else(|| anyhow::anyhow!("No active session available"))?;
-    
-    // Calculate metrics
+    // Calculate metrics from observed data
     let metrics = if use_mock {
         // Generate mock metrics for development
-        generate_mock_metrics(session)
+        let mock_session = TokenSession {
+            id: "mock-session".to_string(),
+            start_time: Utc::now() - chrono::Duration::minutes(30),
+            end_time: None,
+            plan_type: plan_type.clone(),
+            tokens_used: 1500,
+            tokens_limit: plan_type.default_limit(),
+            is_active: true,
+            reset_time: Utc::now() + chrono::Duration::hours(4),
+        };
+        generate_mock_metrics(mock_session)
     } else if let Some(ref monitor) = file_monitor {
-        monitor.calculate_metrics(&session)
+        monitor.calculate_metrics().unwrap_or_else(|| {
+            // If no data is available, create a placeholder
+            println!("📝 No Claude usage data found in JSONL files");
+            UsageMetrics {
+                current_session: TokenSession {
+                    id: "no-data".to_string(),
+                    start_time: Utc::now(),
+                    end_time: None,
+                    plan_type: plan_type.clone(),
+                    tokens_used: 0,
+                    tokens_limit: plan_type.default_limit(),
+                    is_active: false,
+                    reset_time: Utc::now() + chrono::Duration::hours(5),
+                },
+                usage_rate: 0.0,
+                session_progress: 0.0,
+                efficiency_score: 1.0,
+                projected_depletion: None,
+                usage_history: Vec::new(),
+            }
+        })
     } else {
         eprintln!("❌ No file monitor available and not in mock mode");
         std::process::exit(1);
@@ -282,40 +289,8 @@ async fn show_status(session_service: Arc<RwLock<SessionTracker>>) -> Result<()>
     Ok(())
 }
 
-async fn create_session(
-    session_service: Arc<RwLock<SessionTracker>>,
-    plan_type: PlanType,
-) -> Result<()> {
-    let mut session_service = session_service.write().await;
-    let session = session_service.create_session(plan_type).await?;
-    
-    println!("✅ Created new session:");
-    println!("  ID: {}", session.id);
-    println!("  Plan: {:?}", session.plan_type);
-    println!("  Limit: {} tokens", session.tokens_limit);
-    println!("  Resets: {}", humantime::format_rfc3339(session.reset_time.into()));
-    
-    Ok(())
-}
-
-async fn end_session(session_service: Arc<RwLock<SessionTracker>>) -> Result<()> {
-    let session_service_read = session_service.read().await;
-    let active_session = session_service_read.get_active_session().await?;
-    drop(session_service_read);
-    
-    match active_session {
-        Some(session) => {
-            let mut session_service_write = session_service.write().await;
-            session_service_write.end_session(&session.id).await?;
-            println!("✅ Ended session: {}", session.id);
-        }
-        None => {
-            println!("❌ No active session to end");
-        }
-    }
-    
-    Ok(())
-}
+// Session creation/ending functions removed - this is a passive monitoring tool
+// Sessions are observed from JSONL data, not created or managed by this tool
 
 async fn show_history(
     session_service: Arc<RwLock<SessionTracker>>,
@@ -427,7 +402,7 @@ fn show_about() {
     println!("{}", "📱 Claude Token Monitor".bright_cyan().bold());
     println!();
     println!("{}", "📋 Version Information:".bright_yellow().bold());
-    println!("  Version: {}", "v0.2.2".bright_green());
+    println!("  Version: {}", "v0.2.3".bright_green());
     println!("  Name: {}", "claude-token-monitor".bright_white());
     println!("  Description: A lightweight Rust client for Claude token usage monitoring");
     println!();

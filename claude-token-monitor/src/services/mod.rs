@@ -21,11 +21,8 @@ pub trait ConfigService {
     fn get_config_path(&self) -> Result<std::path::PathBuf>;
 }
 
-/// Service for session tracking and management
+/// Service for session observation (passive monitoring only)
 pub trait SessionService: Send + Sync {
-    fn create_session(&mut self, plan_type: PlanType) -> impl std::future::Future<Output = Result<TokenSession>> + Send;
-    fn update_session(&mut self, session_id: &str, tokens_used: u32) -> impl std::future::Future<Output = Result<()>> + Send;
-    fn end_session(&mut self, session_id: &str) -> impl std::future::Future<Output = Result<()>> + Send;
     fn get_active_session(&self) -> impl std::future::Future<Output = Result<Option<TokenSession>>> + Send;
     fn get_session_history(&self, limit: usize) -> impl std::future::Future<Output = Result<Vec<TokenSession>>> + Send;
 }

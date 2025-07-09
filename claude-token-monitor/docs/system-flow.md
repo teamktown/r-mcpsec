@@ -1,4 +1,4 @@
-# Claude Token Monitor - System Flow
+# Claude Token Monitor - System Flow (Passive Monitoring)
 
 ## Application Data Flow
 
@@ -7,147 +7,170 @@ flowchart TD
     A[Application Start] --> B[Parse CLI Arguments]
     B --> C{--force-mock flag?}
     C -->|Yes| D[Initialize Mock TokenMonitor]
-    C -->|No| E[Check Credentials]
+    C -->|No| E[Initialize FileBasedTokenMonitor]
     
-    E --> F[Try CLI Args --api-key]
-    F --> G{API Key Found?}
-    G -->|Yes| H[Create ApiClient]
-    G -->|No| I[Try ~/.claude/.credentials.json]
-    I --> J{Credentials Found?}
-    J -->|Yes| H
-    J -->|No| K[Try Environment Variables]
-    K --> L{CLAUDE_API_KEY set?}
-    L -->|Yes| H
-    L -->|No| M[❌ Exit with Error]
+    E --> F[Discover Claude Data Paths]
+    F --> G[~/.claude/projects/**/*.jsonl]
+    F --> H[~/.config/claude/projects/**/*.jsonl]
+    F --> I[CLAUDE_DATA_PATHS env var]
     
-    H --> N[Test API Connection]
-    N --> O{Connection OK?}
-    O -->|Yes| P[Create Real TokenMonitor]
-    O -->|No| M
+    G --> J[Validate and Canonicalize Paths]
+    H --> J
+    I --> J
     
-    D --> Q[Load Data Directory]
-    P --> Q
-    Q --> R[Create ~/.local/share/claude-token-monitor/]
-    R --> S[Load sessions.json]
-    S --> T[Load config.json]
-    T --> U[Initialize SessionTracker]
-    U --> V[Start Command Processing]
+    J --> K[Initialize SessionTracker for Observation]
+    K --> L[Load Data Directory]
+    L --> M[Create ~/.local/share/claude-token-monitor/]
+    M --> N[Load observed_sessions.json]
+    N --> O[Load config.json]
+    O --> P[Start Command Processing]
     
-    V --> W{Command Type}
-    W -->|monitor| X[Start Monitoring]
-    W -->|status| Y[Show Session Status]
-    W -->|create| Z[Create New Session]
-    W -->|end| AA[End Session]
-    W -->|history| BB[Show History]
-    W -->|config| CC[Update Config]
-    W -->|auth| DD[Auth Commands]
+    P --> Q{Command Type}
+    Q -->|monitor| R[Start Passive Monitoring]
+    Q -->|status| S[Show Observed Session Status]
+    Q -->|history| T[Show Observed Session History]
+    Q -->|config| U[Update Config]
     
-    X --> EE[Ensure Active Session]
-    EE --> FF{Session Exists?}
-    FF -->|No| GG[Create New Session]
-    FF -->|Yes| HH[Use Existing Session]
-    GG --> HH
-    HH --> II[Start Background Monitoring Loop]
+    R --> V[Scan Usage Files]
+    V --> W[FileBasedTokenMonitor.scan_usage_files()]
+    W --> X[Find All .jsonl Files]
+    X --> Y[Parse JSONL Entries]
     
-    II --> JJ[TokenMonitor.monitoring_loop]
-    JJ --> KK[Set update interval timer]
-    KK --> LL[Fetch Current Usage]
+    Y --> Z[Validate JSON with Size/Depth Limits]
+    Z --> AA[Extract Usage Data]
+    AA --> BB[Filter Valid Usage Entries]
+    BB --> CC[Sort by Timestamp]
+    CC --> DD[Deduplicate by Message/Request ID]
     
-    LL --> MM{Mock Mode?}
-    MM -->|Yes| NN[Generate Random Mock Data]
-    MM -->|No| OO[Call Claude API]
+    DD --> EE[Derive Current Session]
+    EE --> FF[FileBasedTokenMonitor.derive_current_session()]
+    FF --> GG[Find Most Recent Entry]
+    GG --> HH[Calculate 5-Hour Session Window]
+    HH --> II[Determine Session Activity]
+    II --> JJ[Generate Deterministic Session ID]
+    JJ --> KK[Calculate Total Tokens in Session]
     
-    NN --> PP[Return Simulated Usage]
-    OO --> QQ{API Success?}
-    QQ -->|Yes| RR[Return Real Usage Data]
-    QQ -->|No| SS[❌ Log Error & Continue]
+    KK --> LL[Calculate Metrics]
+    LL --> MM[FileBasedTokenMonitor.calculate_metrics()]
+    MM --> NN[Usage Rate = tokens/time_elapsed]
+    NN --> OO[Session Progress = elapsed/duration]
+    OO --> PP[Efficiency = expected/actual rate]
+    PP --> QQ[Projected Depletion = remaining/rate]
     
-    PP --> TT[Update Session Data]
-    RR --> TT
-    SS --> TT
+    QQ --> RR[Update UI]
+    RR --> SS{UI Type}
+    SS -->|--basic-ui| TT[TerminalUI.display]
+    SS -->|default| UU[RatatuiTerminalUI.render]
     
-    TT --> UU[Calculate Metrics]
-    UU --> VV[Usage Rate = tokens/time]
-    VV --> WW[Efficiency = expected/actual rate]
-    WW --> XX[Session Progress = elapsed/duration]
-    XX --> YY[Projected Depletion = remaining/rate]
+    UU --> VV{Selected Tab}
+    VV -->|0| WW[Overview: Observed Session & Stats]
+    VV -->|1| XX[Charts: Usage Distribution]
+    VV -->|2| YY[Session: Observed Details & Predictions]
+    VV -->|3| ZZ[Details: File Sources & Token Analysis]
+    VV -->|4| AAA[Security: Analysis Summary]
+    VV -->|5| BBB[Settings: Config & Technical Info]
+    VV -->|6| CCC[About: Attribution & Version]
     
-    YY --> ZZ[Update UsageMetrics]
-    ZZ --> AAA[Save Session to JSON]
-    AAA --> BBB[Update UI]
+    WW --> DDD[Sleep Update Interval]
+    XX --> DDD
+    YY --> DDD
+    ZZ --> DDD
+    AAA --> DDD
+    BBB --> DDD
+    CCC --> DDD
+    TT --> DDD
     
-    BBB --> CCC{UI Type}
-    CCC -->|--basic-ui| DDD[TerminalUI.display]
-    CCC -->|default| EEE[RatatuiTerminalUI.render]
-    
-    EEE --> FFF{Selected Tab}
-    FFF -->|0| GGG[Overview: Gauges & Stats]
-    FFF -->|1| HHH[Charts: Bar Charts]
-    FFF -->|2| III[Session: Details & Predictions]
-    FFF -->|3| JJJ[Settings: Config & Technical Info]
-    
-    GGG --> KKK[Sleep Update Interval]
-    HHH --> KKK
-    III --> KKK
-    JJJ --> KKK
-    DDD --> KKK
-    
-    KKK --> LLL{Continue Monitoring?}
-    LLL -->|Yes| LL
-    LLL -->|No| MMM[Stop Monitoring]
-    MMM --> NNN[Save Final State]
-    NNN --> OOO[Exit Application]
+    DDD --> EEE{Continue Monitoring?}
+    EEE -->|Yes| V
+    EEE -->|No| FFF[Stop Monitoring]
+    FFF --> GGG[Save Final State]
+    GGG --> HHH[Exit Application]
     
     style A fill:#e1f5fe
-    style M fill:#ffebee
-    style P fill:#e8f5e8
+    style E fill:#e8f5e8
     style D fill:#fff3e0
-    style EEE fill:#f3e5f5
-    style OOO fill:#e0f2f1
+    style V fill:#e3f2fd
+    style UU fill:#f3e5f5
+    style HHH fill:#e0f2f1
 ```
 
-## File Operations Flow
+## Passive File Operations Flow
 
 ```mermaid
 flowchart LR
-    A[Session Data] --> B[~/.local/share/claude-token-monitor/]
-    B --> C[sessions.json]
-    B --> D[config.json]
+    A[Claude Code Usage] --> B[~/.claude/projects/**/*.jsonl]
+    B --> C[FileBasedTokenMonitor.scan_usage_files()]
+    C --> D[Parse JSONL Lines]
+    D --> E[Extract Usage Data]
+    E --> F[TokenUsage Structure]
     
-    E[Credentials] --> F[CLI --api-key]
-    E --> G[~/.claude/.credentials.json]
-    E --> H[CLAUDE_API_KEY env var]
+    F --> G[input_tokens]
+    F --> H[output_tokens]
+    F --> I[cache_creation_input_tokens]
+    F --> J[cache_read_input_tokens]
     
-    I[API Client] --> J[fetch_token_usage()]
-    J --> K{Mode}
-    K -->|Real| L[POST https://api.anthropic.com/v1/messages]
-    K -->|Mock| M[Generate Random 1500-1600]
+    G --> K[Calculate Total Tokens]
+    H --> K
+    I --> K
+    J --> K
     
-    L --> N[Parse API Response]
-    M --> O[Return Mock Data]
-    N --> P[Extract session_usage]
-    O --> P
-    P --> Q[Update TokenSession.tokens_used]
-    Q --> R[Calculate Metrics]
-    R --> S[Save to sessions.json]
+    K --> L[Group by Time Windows]
+    L --> M[Derive Session Information]
+    M --> N[PASSIVE Session Creation]
     
-    style C fill:#e3f2fd
-    style D fill:#e8f5e8
-    style G fill:#fff3e0
-    style L fill:#fce4ec
-    style M fill:#fff8e1
+    N --> O[observed-{timestamp}]
+    O --> P[Calculate Session Metrics]
+    P --> Q[Save to observed_sessions.json]
+    
+    R[Session Data] --> S[~/.local/share/claude-token-monitor/]
+    S --> T[observed_sessions.json]
+    S --> U[config.json]
+    
+    style B fill:#e3f2fd
+    style C fill:#e8f5e8
+    style N fill:#fff3e0
+    style T fill:#fce4ec
+    style U fill:#fff8e1
+```
+
+## Passive Monitoring Architecture
+
+### Key Principles
+1. **No Session Creation**: Tool only observes existing sessions from JSONL data
+2. **Passive Observation**: Reads Claude Code's usage files without modification
+3. **Derived Sessions**: Sessions are calculated from usage patterns, not managed
+4. **File-Based**: No API calls or authentication required
+5. **Real-time Updates**: File system watching for immediate updates
+
+### Data Sources
+- **Primary**: `~/.claude/projects/**/*.jsonl` files written by Claude Code
+- **Secondary**: `~/.config/claude/projects/**/*.jsonl` (alternative location)
+- **Environment**: `CLAUDE_DATA_PATHS` and `CLAUDE_DATA_PATH` variables
+
+### Session Derivation Logic
+```
+1. Parse all JSONL entries from usage files
+2. Sort by timestamp chronologically
+3. Find most recent entry to determine current session
+4. Calculate 5-hour session window from most recent entry
+5. Sum all tokens within that window
+6. Generate deterministic session ID: "observed-{timestamp}"
+7. Determine if session is active based on current time vs reset time
 ```
 
 ## Calculation Details
 
-### Usage Rate Calculation
+### Usage Rate Calculation (Passive)
 ```
-usage_rate = (current_tokens - start_tokens) / time_elapsed_minutes
+usage_rate = total_session_tokens / time_elapsed_minutes
+where:
+  total_session_tokens = sum of all tokens in current session window
+  time_elapsed_minutes = minutes since session start
 ```
 
 ### Efficiency Score Calculation
 ```
-expected_rate = total_session_duration / session_progress
+expected_rate = token_limit / session_duration_minutes
 actual_rate = current_usage_rate
 efficiency = min(1.0, max(0.0, expected_rate / actual_rate))
 ```
@@ -168,19 +191,18 @@ progress = elapsed_time / session_duration
 
 ## Data Persistence
 
-### Session Storage (sessions.json)
+### Observed Session Storage (observed_sessions.json)
 ```json
 [
   {
-    "id": "uuid-v4",
-    "plan_type": "Pro",
-    "tokens_used": 15420,
-    "tokens_limit": 40000,
-    "start_time": "2025-07-08T18:30:00Z",
-    "reset_time": "2025-07-08T23:30:00Z",
+    "id": "observed-1752068062",
+    "plan_type": "Max20",
+    "tokens_used": 54143,
+    "tokens_limit": 100000,
+    "start_time": "2025-07-09T13:34:39Z",
+    "reset_time": "2025-07-09T18:34:39Z",
     "is_active": true,
-    "created_at": "2025-07-08T18:30:00Z",
-    "updated_at": "2025-07-08T19:15:00Z"
+    "end_time": null
   }
 ]
 ```
@@ -204,12 +226,40 @@ progress = elapsed_time / session_duration
 }
 ```
 
-### Claude CLI Credentials (~/.claude/.credentials.json)
+### Claude Code JSONL Format (Read-Only)
 ```json
 {
-  "access_token": "oauth-access-token",
-  "refresh_token": "oauth-refresh-token",
-  "expires_at": "2025-07-15T18:30:00Z",
-  "token_type": "Bearer"
+  "timestamp": "2025-07-09T13:34:39.652Z",
+  "message": {
+    "id": "msg_123",
+    "model": "claude-sonnet-4-20250514",
+    "usage": {
+      "input_tokens": 150,
+      "output_tokens": 287,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+    }
+  },
+  "requestId": "req_456"
 }
 ```
+
+## Security Features
+
+### Input Validation
+- **JSON Size Limits**: 1MB max per JSON line
+- **Depth Limits**: 32 levels maximum nesting
+- **File Size Limits**: 50MB max file size
+- **Path Validation**: Canonicalization to prevent traversal attacks
+
+### Safe File Operations
+- **Read-Only**: Never writes to Claude Code files
+- **Path Sanitization**: Validates all file paths before access
+- **Error Handling**: Graceful handling of malformed data
+- **Memory Safety**: Rust ownership prevents buffer overflows
+
+### Privacy Protection
+- **No API Access**: No network connections to Claude servers
+- **Local Processing**: All data processing happens locally
+- **Content Agnostic**: Only reads token counts, not conversation content
+- **Minimal Logging**: Sensitive data redacted in debug output

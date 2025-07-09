@@ -15,7 +15,7 @@
 		"vscode": {
 			"settings": {},
 			"extensions": [
-				"streetsidesoftware.code-spell-checker"
+				"bierner.markdown-mermaid"
 			]
 		}
 	},
