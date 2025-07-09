@@ -142,7 +142,16 @@ impl RatatuiTerminalUI {
 
     /// Draw application header
     fn draw_header(frame: &mut Frame, area: Rect) {
-        let title = Paragraph::new("🧠 Claude Token Monitor - Rust Edition")
+        let build_time = env!("CLAUDE_TOKEN_MONITOR_BUILD_TIME", "unknown");
+        let version = env!("CARGO_PKG_VERSION");
+        
+        let header_text = format!(
+            "🧠 Claude Token Monitor - Rust Edition v{} (Built: {})", 
+            version, 
+            build_time
+        );
+        
+        let title = Paragraph::new(header_text)
             .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
             .alignment(Alignment::Center)
             .block(
@@ -306,8 +315,12 @@ impl RatatuiTerminalUI {
             .split(area);
 
         // Version and Author Information
+        let version = env!("CARGO_PKG_VERSION");
+        let build_time = env!("CLAUDE_TOKEN_MONITOR_BUILD_TIME", "unknown");
+        
         let version_info = vec![
-            "📱 Claude Token Monitor v0.2.2".to_string(),
+            format!("📱 Claude Token Monitor v{}", version),
+            format!("🏗️  Built: {}", build_time),
             "".to_string(),
             "👨‍💻 Author: Chris Phillips".to_string(),
             "📧 Email: chris@adiuco.com".to_string(),
@@ -534,27 +547,60 @@ impl RatatuiTerminalUI {
 
     /// Draw usage history chart
     fn draw_usage_history_chart(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
-        // Create sample historical data for demonstration
-        let history_data = vec![
-            ("1h ago", metrics.current_session.tokens_used.saturating_sub(200) as u64),
-            ("45m ago", metrics.current_session.tokens_used.saturating_sub(150) as u64),
-            ("30m ago", metrics.current_session.tokens_used.saturating_sub(100) as u64),
-            ("15m ago", metrics.current_session.tokens_used.saturating_sub(50) as u64),
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(8),  // Time period chart
+                Constraint::Min(4),     // Usage trend chart
+            ])
+            .split(area);
+
+        // Time period usage summary
+        let current_tokens = metrics.current_session.tokens_used;
+        
+        // Calculate time-based usage periods (using mock data for now)
+        let period_data = vec![
+            ("Last 12h", ((current_tokens as f64 * 0.8) as u64)),
+            ("Last 24h", current_tokens as u64),
+            ("Last 48h", ((current_tokens as f64 * 1.2) as u64)),
+            ("Last 7d", ((current_tokens as f64 * 1.8) as u64)),
+        ];
+
+        let period_chart = BarChart::default()
+            .block(
+                Block::default()
+                    .title("Token Usage by Time Period")
+                    .borders(Borders::ALL),
+            )
+            .data(&period_data)
+            .bar_width(8)
+            .bar_style(Style::default().fg(Color::Yellow))
+            .value_style(Style::default().fg(Color::Black).bg(Color::Yellow));
+
+        frame.render_widget(period_chart, chunks[0]);
+
+        // Recent usage trend
+        let trend_data = vec![
+            ("6h ago", metrics.current_session.tokens_used.saturating_sub(400) as u64),
+            ("4h ago", metrics.current_session.tokens_used.saturating_sub(300) as u64),
+            ("2h ago", metrics.current_session.tokens_used.saturating_sub(200) as u64),
+            ("1h ago", metrics.current_session.tokens_used.saturating_sub(100) as u64),
+            ("30m ago", metrics.current_session.tokens_used.saturating_sub(50) as u64),
             ("Now", metrics.current_session.tokens_used as u64),
         ];
 
-        let barchart = BarChart::default()
+        let trend_chart = BarChart::default()
             .block(
                 Block::default()
-                    .title("Token Usage History")
+                    .title("Recent Usage Trend")
                     .borders(Borders::ALL),
             )
-            .data(&history_data)
+            .data(&trend_data)
             .bar_width(3)
             .bar_style(Style::default().fg(Color::Cyan))
             .value_style(Style::default().fg(Color::Black).bg(Color::Cyan));
 
-        frame.render_widget(barchart, area);
+        frame.render_widget(trend_chart, chunks[1]);
     }
 
     /// Draw detailed current session information
