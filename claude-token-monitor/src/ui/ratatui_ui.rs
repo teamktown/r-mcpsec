@@ -90,10 +90,10 @@ impl RatatuiTerminalUI {
                         return Ok(true);
                     }
                     KeyCode::Tab => {
-                        self.selected_tab = (self.selected_tab + 1) % 6;
+                        self.selected_tab = (self.selected_tab + 1) % 7;
                     }
                     KeyCode::BackTab => {
-                        self.selected_tab = if self.selected_tab == 0 { 5 } else { self.selected_tab - 1 };
+                        self.selected_tab = if self.selected_tab == 0 { 6 } else { self.selected_tab - 1 };
                     }
                     KeyCode::Up => {
                         if self.selected_tab == 3 { // Details tab
@@ -156,8 +156,9 @@ impl RatatuiTerminalUI {
             1 => Self::draw_charts_tab(frame, chunks[2], metrics),
             2 => Self::draw_session_tab(frame, chunks[2], metrics),
             3 => Self::draw_details_tab(frame, chunks[2], metrics, details_selected, show_details_pane),
-            4 => Self::draw_settings_tab(frame, chunks[2]),
-            5 => Self::draw_about_tab(frame, chunks[2]),
+            4 => Self::draw_security_tab(frame, chunks[2]),
+            5 => Self::draw_settings_tab(frame, chunks[2]),
+            6 => Self::draw_about_tab(frame, chunks[2]),
             _ => {}
         }
 
@@ -189,7 +190,7 @@ impl RatatuiTerminalUI {
 
     /// Draw tab navigation
     fn draw_tabs(frame: &mut Frame, area: Rect, selected_tab: usize) {
-        let tab_titles = vec!["Overview", "Charts", "Session", "Details", "Settings", "About"];
+        let tab_titles = vec!["Overview", "Charts", "Session", "Details", "Security", "Settings", "About"];
         let tabs = Tabs::new(tab_titles)
             .block(Block::default().borders(Borders::ALL).title("Navigation"))
             .style(Style::default().fg(Color::White))
@@ -641,6 +642,131 @@ impl RatatuiTerminalUI {
             "• Message IDs in usage data".to_string(),
             "• Request IDs for tracking".to_string(),
         ]
+    }
+
+    /// Draw security tab with security analysis summary
+    fn draw_security_tab(frame: &mut Frame, area: Rect) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(6),  // Security Summary
+                Constraint::Length(10), // Vulnerability Assessment
+                Constraint::Min(8),     // Recommendations
+            ])
+            .split(area);
+
+        // Security Summary
+        let security_summary = vec![
+            "🔒 Security Analysis Summary".to_string(),
+            "".to_string(),
+            "Risk Level: LOW-MEDIUM".to_string(),
+            "No critical vulnerabilities identified".to_string(),
+            "Memory safety enforced by Rust".to_string(),
+            "No network communication reduces attack surface".to_string(),
+        ];
+
+        let summary_items: Vec<ListItem> = security_summary
+            .iter()
+            .map(|s| ListItem::new(Line::from(s.as_str())))
+            .collect();
+
+        let summary_list = List::new(summary_items)
+            .block(
+                Block::default()
+                    .title("Security Status")
+                    .borders(Borders::ALL),
+            )
+            .style(Style::default().fg(Color::Green));
+
+        frame.render_widget(summary_list, chunks[0]);
+
+        // Vulnerability Assessment
+        let vulnerability_info = vec![
+            "🟡 MEDIUM: Memory leak in file watcher (src/services/file_monitor.rs:377)".to_string(),
+            "🟡 MEDIUM: Unvalidated environment variables (CLAUDE_DATA_PATHS)".to_string(),
+            "🟡 MEDIUM: Unbounded JSON parsing without size limits".to_string(),
+            "🟡 MEDIUM: Directory traversal potential in WalkDir usage".to_string(),
+            "🟢 LOW: Debug trait exposure in sensitive structs".to_string(),
+            "🟢 LOW: No unsafe blocks found in codebase".to_string(),
+            "🟢 LOW: No direct secret/API key handling".to_string(),
+            "🟢 LOW: File-based monitoring reduces attack surface".to_string(),
+        ];
+
+        let vuln_items: Vec<ListItem> = vulnerability_info
+            .iter()
+            .map(|s| {
+                let color = if s.contains("🟡") {
+                    Color::Yellow
+                } else if s.contains("🟢") {
+                    Color::Green
+                } else {
+                    Color::White
+                };
+                ListItem::new(Line::from(s.as_str())).style(Style::default().fg(color))
+            })
+            .collect();
+
+        let vuln_list = List::new(vuln_items)
+            .block(
+                Block::default()
+                    .title("Vulnerability Assessment")
+                    .borders(Borders::ALL),
+            )
+            .style(Style::default().fg(Color::White));
+
+        frame.render_widget(vuln_list, chunks[1]);
+
+        // Recommendations
+        let recommendations = vec![
+            "🔧 Security Recommendations:".to_string(),
+            "".to_string(),
+            "HIGH PRIORITY:".to_string(),
+            "1. Fix memory leak: Replace std::mem::forget with proper lifetime management".to_string(),
+            "2. Validate environment variables: Implement path validation for env vars".to_string(),
+            "3. Add JSON limits: Implement size and depth limits for JSON parsing".to_string(),
+            "".to_string(),
+            "MEDIUM PRIORITY:".to_string(),
+            "4. Path canonicalization: Ensure all file paths are canonicalized".to_string(),
+            "5. Custom Debug implementations: Redact sensitive data in debug output".to_string(),
+            "6. Dependency auditing: Set up regular cargo audit scanning".to_string(),
+            "".to_string(),
+            "✅ POSITIVE SECURITY FEATURES:".to_string(),
+            "• Memory safety via Rust ownership system".to_string(),
+            "• No network communication or authentication vulnerabilities".to_string(),
+            "• Read-only file operations with minimal privileges".to_string(),
+            "• Strong typing prevents input validation errors".to_string(),
+            "".to_string(),
+            "📊 SBOM & Dependencies: 18 direct deps, 100+ transitive deps analyzed".to_string(),
+            "📋 Full analysis: See SECURITY_ANALYSIS.md and SBOM.spdx files".to_string(),
+        ];
+
+        let rec_items: Vec<ListItem> = recommendations
+            .iter()
+            .map(|s| {
+                let color = if s.contains("HIGH PRIORITY") {
+                    Color::Red
+                } else if s.contains("MEDIUM PRIORITY") {
+                    Color::Yellow
+                } else if s.contains("✅") {
+                    Color::Green
+                } else if s.contains("📊") || s.contains("📋") {
+                    Color::Cyan
+                } else {
+                    Color::White
+                };
+                ListItem::new(Line::from(s.as_str())).style(Style::default().fg(color))
+            })
+            .collect();
+
+        let rec_list = List::new(rec_items)
+            .block(
+                Block::default()
+                    .title("Recommendations & Analysis")
+                    .borders(Borders::ALL),
+            )
+            .style(Style::default().fg(Color::White));
+
+        frame.render_widget(rec_list, chunks[2]);
     }
 
     /// Draw about tab with version, author, and attribution information

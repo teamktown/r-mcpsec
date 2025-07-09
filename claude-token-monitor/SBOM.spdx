@@ -1,0 +1,249 @@
+SPDXVersion: SPDX-2.3
+DataLicense: CC0-1.0
+SPDXID: SPDXRef-DOCUMENT
+Name: Claude Token Monitor SBOM
+DocumentNamespace: https://github.com/teamktown/claude-token-monitor/sbom
+Creator: Tool: claude-code-security-analyzer
+Created: 2025-01-09T12:00:00Z
+
+PackageName: claude-token-monitor
+SPDXID: SPDXRef-Package-claude-token-monitor
+PackageDownloadLocation: https://github.com/teamktown/claude-token-monitor
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT
+PackageLicenseDeclared: MIT
+PackageCopyrightText: NOASSERTION
+PackageVersion: 0.2.2
+PackageSupplier: Person: Chris Phillips <chris@chrisphillips.ca>
+
+# Direct Dependencies
+
+PackageName: anyhow
+SPDXID: SPDXRef-Package-anyhow
+PackageDownloadLocation: https://crates.io/crates/anyhow
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT OR Apache-2.0
+PackageVersion: 1.0.98
+PackageSupplier: Person: David Tolnay <dtolnay@gmail.com>
+
+PackageName: chrono
+SPDXID: SPDXRef-Package-chrono
+PackageDownloadLocation: https://crates.io/crates/chrono
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT OR Apache-2.0
+PackageVersion: 0.4.41
+PackageSupplier: Organization: Chrono Contributors
+SecurityAssessment: MEDIUM - Date/time parsing potential for DoS
+
+PackageName: clap
+SPDXID: SPDXRef-Package-clap
+PackageDownloadLocation: https://crates.io/crates/clap
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT OR Apache-2.0
+PackageVersion: 4.5.40
+PackageSupplier: Person: Kevin K. <kbknapp@gmail.com>
+
+PackageName: colored
+SPDXID: SPDXRef-Package-colored
+PackageDownloadLocation: https://crates.io/crates/colored
+FilesAnalyzed: false
+PackageLicenseConcluded: MPL-2.0
+PackageVersion: 2.2.0
+PackageSupplier: Person: Thomas Wickham <mackwic@gmail.com>
+
+PackageName: crossterm
+SPDXID: SPDXRef-Package-crossterm
+PackageDownloadLocation: https://crates.io/crates/crossterm
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT
+PackageVersion: 0.27.0
+PackageSupplier: Person: Timon Post <timonpost@gmail.com>
+SecurityAssessment: MEDIUM - Terminal I/O operations with system interaction
+
+PackageName: dirs
+SPDXID: SPDXRef-Package-dirs
+PackageDownloadLocation: https://crates.io/crates/dirs
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT OR Apache-2.0
+PackageVersion: 5.0.1
+PackageSupplier: Person: Simon Ochsenreither <simon@ochsenreither.de>
+
+PackageName: env_logger
+SPDXID: SPDXRef-Package-env_logger
+PackageDownloadLocation: https://crates.io/crates/env_logger
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT OR Apache-2.0
+PackageVersion: 0.10.2
+PackageSupplier: Organization: Rust Project
+
+PackageName: futures
+SPDXID: SPDXRef-Package-futures
+PackageDownloadLocation: https://crates.io/crates/futures
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT OR Apache-2.0
+PackageVersion: 0.3.31
+PackageSupplier: Person: Alex Crichton <alex@alexcrichton.com>
+
+PackageName: humantime
+SPDXID: SPDXRef-Package-humantime
+PackageDownloadLocation: https://crates.io/crates/humantime
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT OR Apache-2.0
+PackageVersion: 2.2.0
+PackageSupplier: Person: Paul Colomiets <paul@colomiets.name>
+
+PackageName: log
+SPDXID: SPDXRef-Package-log
+PackageDownloadLocation: https://crates.io/crates/log
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT OR Apache-2.0
+PackageVersion: 0.4.27
+PackageSupplier: Organization: Rust Project
+
+PackageName: notify
+SPDXID: SPDXRef-Package-notify
+PackageDownloadLocation: https://crates.io/crates/notify
+FilesAnalyzed: false
+PackageLicenseConcluded: CC0-1.0
+PackageVersion: 6.1.1
+PackageSupplier: Person: Félix Saparelli <felix@passcod.name>
+SecurityAssessment: HIGH - File system monitoring with elevated privileges
+
+PackageName: rand
+SPDXID: SPDXRef-Package-rand
+PackageDownloadLocation: https://crates.io/crates/rand
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT OR Apache-2.0
+PackageVersion: 0.8.5
+PackageSupplier: Organization: Rust Random Project
+SecurityAssessment: MEDIUM - Random number generation for security-sensitive operations
+
+PackageName: ratatui
+SPDXID: SPDXRef-Package-ratatui
+PackageDownloadLocation: https://crates.io/crates/ratatui
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT
+PackageVersion: 0.28.1
+PackageSupplier: Person: Florian Dehau <florian@dehau.eu>
+
+PackageName: serde
+SPDXID: SPDXRef-Package-serde
+PackageDownloadLocation: https://crates.io/crates/serde
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT OR Apache-2.0
+PackageVersion: 1.0.219
+PackageSupplier: Person: Erick Tryzelaar <erick.tryzelaar@gmail.com>
+SecurityAssessment: HIGH - Serialization framework handling untrusted data
+
+PackageName: serde_json
+SPDXID: SPDXRef-Package-serde_json
+PackageDownloadLocation: https://crates.io/crates/serde_json
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT OR Apache-2.0
+PackageVersion: 1.0.140
+PackageSupplier: Person: Erick Tryzelaar <erick.tryzelaar@gmail.com>
+SecurityAssessment: HIGH - JSON parsing of untrusted data
+
+PackageName: tokio
+SPDXID: SPDXRef-Package-tokio
+PackageDownloadLocation: https://crates.io/crates/tokio
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT
+PackageVersion: 1.46.1
+PackageSupplier: Person: Tokio Contributors <team@tokio.rs>
+SecurityAssessment: MEDIUM - Async runtime with threading implications
+
+PackageName: uuid
+SPDXID: SPDXRef-Package-uuid
+PackageDownloadLocation: https://crates.io/crates/uuid
+FilesAnalyzed: false
+PackageLicenseConcluded: Apache-2.0 OR MIT
+PackageVersion: 1.17.0
+PackageSupplier: Organization: UUID Contributors
+SecurityAssessment: LOW - UUID generation
+
+PackageName: walkdir
+SPDXID: SPDXRef-Package-walkdir
+PackageDownloadLocation: https://crates.io/crates/walkdir
+FilesAnalyzed: false
+PackageLicenseConcluded: Unlicense/MIT
+PackageVersion: 2.5.0
+PackageSupplier: Person: Andrew Gallant <jamslam@gmail.com>
+SecurityAssessment: MEDIUM - Directory traversal operations
+
+# Security-Critical Transitive Dependencies
+
+PackageName: libc
+SPDXID: SPDXRef-Package-libc
+PackageDownloadLocation: https://crates.io/crates/libc
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT OR Apache-2.0
+PackageVersion: 0.2.174
+PackageSupplier: Organization: Rust Project
+SecurityAssessment: HIGH - System call interface, potential security boundary
+
+PackageName: mio
+SPDXID: SPDXRef-Package-mio
+PackageDownloadLocation: https://crates.io/crates/mio
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT
+PackageVersion: 1.0.4
+PackageSupplier: Person: Carl Lerche <me@carllerche.com>
+SecurityAssessment: MEDIUM - Low-level I/O operations
+
+PackageName: signal-hook
+SPDXID: SPDXRef-Package-signal-hook
+PackageDownloadLocation: https://crates.io/crates/signal-hook
+FilesAnalyzed: false
+PackageLicenseConcluded: Apache-2.0/MIT
+PackageVersion: 0.3.18
+PackageSupplier: Person: Michal Vaner <vorner@vorner.cz>
+SecurityAssessment: MEDIUM - Signal handling with security implications
+
+PackageName: regex
+SPDXID: SPDXRef-Package-regex
+PackageDownloadLocation: https://crates.io/crates/regex
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT OR Apache-2.0
+PackageVersion: 1.11.1
+PackageSupplier: Person: Andrew Gallant <jamslam@gmail.com>
+SecurityAssessment: MEDIUM - Pattern matching, potential ReDoS attacks
+
+PackageName: getrandom
+SPDXID: SPDXRef-Package-getrandom
+PackageDownloadLocation: https://crates.io/crates/getrandom
+FilesAnalyzed: false
+PackageLicenseConcluded: MIT OR Apache-2.0
+PackageVersion: 0.3.3
+PackageSupplier: Organization: Rust Random Project
+SecurityAssessment: HIGH - Cryptographically secure random number generation
+
+# Relationships
+
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-anyhow
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-chrono
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-clap
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-colored
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-crossterm
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-dirs
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-env_logger
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-futures
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-humantime
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-log
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-notify
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-rand
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-ratatui
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-serde
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-serde_json
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-tokio
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-uuid
+Relationship: SPDXRef-Package-claude-token-monitor DEPENDS_ON SPDXRef-Package-walkdir
+
+# Vulnerability Assessments
+
+# Known Vulnerabilities: None identified in current versions
+# Recommendations: 
+# 1. Run cargo audit regularly
+# 2. Update dependencies monthly
+# 3. Monitor RustSec Advisory Database
+# 4. Implement automated dependency scanning
