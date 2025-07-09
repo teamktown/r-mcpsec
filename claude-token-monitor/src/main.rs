@@ -18,7 +18,7 @@ use chrono::Utc;
 #[derive(Parser)]
 #[command(name = "claude-token-monitor")]
 #[command(about = "A lightweight Rust client for Claude token usage monitoring")]
-#[command(version = "0.2.2")]
+#[command(version = "0.2.3")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -228,17 +228,48 @@ async fn run_monitor(
     };
     
     // Initialize and run UI based on CLI flag (Ratatui is default)
-    if use_basic_ui {
+    // Try interactive UI first, fall back to status display if it fails
+    let ui_result: Result<(), anyhow::Error> = if use_basic_ui {
         // Use basic terminal UI
         let mut ui = TerminalUI::new(config);
-        ui.init()?;
-        ui.run(&metrics).await?;
-        ui.cleanup()?;
+        match ui.init() {
+            Ok(()) => {
+                let result = ui.run(&metrics).await;
+                let _ = ui.cleanup();
+                result.map_err(|e| e.into())
+            }
+            Err(e) => Err(e.into())
+        }
     } else {
         // Use enhanced Ratatui interface (default)
-        let mut ratatui_ui = RatatuiTerminalUI::new(config)?;
-        ratatui_ui.run(&metrics).await?;
-        ratatui_ui.cleanup()?;
+        match RatatuiTerminalUI::new(config) {
+            Ok(mut ratatui_ui) => {
+                let result = ratatui_ui.run(&metrics).await;
+                let _ = ratatui_ui.cleanup();
+                result
+            }
+            Err(e) => Err(e)
+        }
+    };
+    
+    // If UI fails, show status and exit gracefully
+    if let Err(_) = ui_result {
+        println!("📊 Token Usage Summary:");
+        println!("  Session: {} ({})", metrics.current_session.id, 
+                if metrics.current_session.is_active { "ACTIVE" } else { "INACTIVE" });
+        println!("  Plan: {:?}", metrics.current_session.plan_type);
+        println!("  Usage: {} / {} tokens ({:.1}%)", 
+                metrics.current_session.tokens_used,
+                metrics.current_session.tokens_limit,
+                (metrics.current_session.tokens_used as f64 / metrics.current_session.tokens_limit as f64) * 100.0);
+        println!("  Rate: {:.2} tokens/minute", metrics.usage_rate);
+        println!("  Efficiency: {:.2}", metrics.efficiency_score);
+        if let Some(depletion) = &metrics.projected_depletion {
+            println!("  Projected depletion: {}", humantime::format_rfc3339((*depletion).into()));
+        }
+        println!();
+        println!("💡 Interactive UI not available in this environment.");
+        println!("   Use 'claude-token-monitor status' for quick checks.");
     }
     
     Ok(())
