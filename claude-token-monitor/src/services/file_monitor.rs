@@ -153,8 +153,19 @@ impl FileBasedTokenMonitor {
             
             match serde_json::from_str::<serde_json::Value>(line) {
                 Ok(json) => {
-                    if let Ok(entry) = self.parse_usage_entry(json) {
-                        entries.push(entry);
+                    match self.parse_usage_entry(json) {
+                        Ok(entry) => {
+                            entries.push(entry);
+                        }
+                        Err(e) => {
+                            // Only log debug for unexpected errors, skip normal skippable entries
+                            let error_msg = e.to_string();
+                            if error_msg.contains("No usage data") || error_msg.contains("Skipping summary") {
+                                log::trace!("Skipping entry at line {} in {:?}: {}", line_num + 1, file_path, error_msg);
+                            } else {
+                                log::debug!("Failed to parse usage entry at line {} in {:?}: {}", line_num + 1, file_path, e);
+                            }
+                        }
                     }
                 }
                 Err(e) => {
@@ -168,6 +179,13 @@ impl FileBasedTokenMonitor {
 
     /// Parse a JSON value into a UsageEntry
     fn parse_usage_entry(&self, json: serde_json::Value) -> Result<UsageEntry> {
+        // Skip summary entries and other non-message entries
+        if let Some(entry_type) = json.get("type").and_then(|v| v.as_str()) {
+            if entry_type == "summary" {
+                return Err(anyhow!("Skipping summary entry"));
+            }
+        }
+
         // Extract timestamp
         let timestamp = if let Some(ts_str) = json.get("timestamp").and_then(|v| v.as_str()) {
             DateTime::parse_from_rfc3339(ts_str)?.with_timezone(&Utc)
@@ -175,32 +193,76 @@ impl FileBasedTokenMonitor {
             return Err(anyhow!("Missing or invalid timestamp"));
         };
 
-        // Extract usage information
-        let usage = if let Some(usage_obj) = json.get("usage") {
-            TokenUsage {
-                input_tokens: usage_obj.get("input_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32,
-                output_tokens: usage_obj.get("output_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32,
-                cache_creation_input_tokens: usage_obj.get("cache_creation_input_tokens")
-                    .and_then(|v| v.as_u64())
-                    .map(|v| v as u32),
-                cache_read_input_tokens: usage_obj.get("cache_read_input_tokens")
-                    .and_then(|v| v.as_u64())
-                    .map(|v| v as u32),
+        // Extract usage information from Claude Code JSONL format
+        // Usage data is nested inside message.usage for assistant responses
+        let usage = if let Some(message) = json.get("message") {
+            if let Some(usage_obj) = message.get("usage") {
+                TokenUsage {
+                    input_tokens: usage_obj.get("input_tokens")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as u32,
+                    output_tokens: usage_obj.get("output_tokens")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as u32,
+                    cache_creation_input_tokens: usage_obj.get("cache_creation_input_tokens")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as u32),
+                    cache_read_input_tokens: usage_obj.get("cache_read_input_tokens")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as u32),
+                }
+            } else {
+                // Skip entries without usage data (user messages, etc.)
+                return Err(anyhow!("No usage data in message"));
             }
         } else {
-            return Err(anyhow!("Missing usage information"));
+            // Try fallback for direct usage format (in case format changes)
+            if let Some(usage_obj) = json.get("usage") {
+                TokenUsage {
+                    input_tokens: usage_obj.get("input_tokens")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as u32,
+                    output_tokens: usage_obj.get("output_tokens")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as u32,
+                    cache_creation_input_tokens: usage_obj.get("cache_creation_input_tokens")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as u32),
+                    cache_read_input_tokens: usage_obj.get("cache_read_input_tokens")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as u32),
+                }
+            } else {
+                return Err(anyhow!("Missing usage information"));
+            }
         };
+
+        // Extract model from message.model for Claude Code format
+        let model = json.get("message")
+            .and_then(|m| m.get("model"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| json.get("model").and_then(|v| v.as_str()).map(|s| s.to_string()));
+
+        // Extract message ID from message.id for Claude Code format
+        let message_id = json.get("message")
+            .and_then(|m| m.get("id"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| json.get("message_id").and_then(|v| v.as_str()).map(|s| s.to_string()));
+
+        // Extract request ID from requestId field in Claude Code format
+        let request_id = json.get("requestId")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| json.get("request_id").and_then(|v| v.as_str()).map(|s| s.to_string()));
 
         Ok(UsageEntry {
             timestamp,
             usage,
-            model: json.get("model").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            message_id: json.get("message_id").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            request_id: json.get("request_id").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            model,
+            message_id,
+            request_id,
         })
     }
 
