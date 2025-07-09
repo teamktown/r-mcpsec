@@ -4,19 +4,37 @@ use chrono::{DateTime, Utc};
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex};
 use tokio::fs;
 use walkdir::WalkDir;
 
+// Security constants for JSON parsing limits
+const MAX_JSON_SIZE: usize = 1024 * 1024; // 1MB max per JSON line
+const MAX_JSON_DEPTH: usize = 32; // Maximum nesting depth
+const MAX_FILE_SIZE: usize = 50 * 1024 * 1024; // 50MB max file size
+
 /// Claude usage entry from JSONL files
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct UsageEntry {
     pub timestamp: DateTime<Utc>,
     pub usage: TokenUsage,
     pub model: Option<String>,
     pub message_id: Option<String>,
     pub request_id: Option<String>,
+}
+
+impl fmt::Debug for UsageEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("UsageEntry")
+            .field("timestamp", &self.timestamp)
+            .field("usage", &self.usage)
+            .field("model", &self.model)
+            .field("message_id", &self.message_id.as_ref().map(|_| "[REDACTED]")) // Redact message ID
+            .field("request_id", &self.request_id.as_ref().map(|_| "[REDACTED]")) // Redact request ID
+            .finish()
+    }
 }
 
 /// Token usage information
@@ -42,6 +60,7 @@ pub struct FileBasedTokenMonitor {
     claude_data_paths: Vec<PathBuf>,
     usage_entries: Vec<UsageEntry>,
     _last_scan: DateTime<Utc>,
+    _watcher: Option<Arc<Mutex<RecommendedWatcher>>>,
 }
 
 impl FileBasedTokenMonitor {
@@ -58,6 +77,7 @@ impl FileBasedTokenMonitor {
             claude_data_paths,
             usage_entries: Vec::new(),
             _last_scan: Utc::now(),
+            _watcher: None,
         })
     }
 
@@ -73,27 +93,91 @@ impl FileBasedTokenMonitor {
             home_dir.join(".config").join("claude").join("projects"),
         ];
         
-        // Check environment variables
+        // Check environment variables with validation
         if let Ok(env_paths) = std::env::var("CLAUDE_DATA_PATHS") {
             for path_str in env_paths.split(':') {
-                paths.push(PathBuf::from(path_str));
+                if let Ok(validated_path) = Self::validate_and_canonicalize_path(path_str) {
+                    paths.push(validated_path);
+                } else {
+                    log::warn!("Invalid path in CLAUDE_DATA_PATHS: {}", path_str);
+                }
             }
         }
         
         if let Ok(env_path) = std::env::var("CLAUDE_DATA_PATH") {
-            paths.push(PathBuf::from(env_path));
+            if let Ok(validated_path) = Self::validate_and_canonicalize_path(&env_path) {
+                paths.push(validated_path);
+            } else {
+                log::warn!("Invalid path in CLAUDE_DATA_PATH: {}", env_path);
+            }
         }
         
         // Add standard paths
         paths.extend(standard_paths);
         
-        // Filter to only existing directories
+        // Filter to only existing directories and canonicalize
         let existing_paths: Vec<PathBuf> = paths
             .into_iter()
-            .filter(|path| path.exists() && path.is_dir())
+            .filter_map(|path| {
+                if path.exists() && path.is_dir() {
+                    path.canonicalize().ok()
+                } else {
+                    None
+                }
+            })
             .collect();
         
         Ok(existing_paths)
+    }
+    
+    /// Validate and canonicalize a path to prevent directory traversal attacks
+    fn validate_and_canonicalize_path(path_str: &str) -> Result<PathBuf> {
+        // Reject empty paths
+        if path_str.trim().is_empty() {
+            return Err(anyhow!("Empty path not allowed"));
+        }
+        
+        // Reject paths with null bytes
+        if path_str.contains('\0') {
+            return Err(anyhow!("Path contains null bytes"));
+        }
+        
+        // Reject paths that are too long
+        if path_str.len() > 4096 {
+            return Err(anyhow!("Path too long (max 4096 characters)"));
+        }
+        
+        let path = PathBuf::from(path_str);
+        
+        // Reject relative paths that try to escape
+        if path_str.contains("../") || path_str.contains("..\\") {
+            return Err(anyhow!("Relative path traversal not allowed"));
+        }
+        
+        // Canonicalize the path to resolve symlinks and normalize
+        let canonical_path = path.canonicalize()
+            .map_err(|e| anyhow!("Failed to canonicalize path {}: {}", path_str, e))?;
+        
+        // Ensure the canonical path is within reasonable bounds (under home directory)
+        if let Some(home_dir) = dirs::home_dir() {
+            if !canonical_path.starts_with(&home_dir) {
+                // Allow system directories that are commonly used for Claude data
+                let allowed_system_paths = vec![
+                    "/opt/claude",
+                    "/usr/local/share/claude",
+                    "/var/lib/claude",
+                ];
+                
+                let is_allowed = allowed_system_paths.iter()
+                    .any(|allowed| canonical_path.starts_with(allowed));
+                
+                if !is_allowed {
+                    return Err(anyhow!("Path outside of allowed directories: {}", canonical_path.display()));
+                }
+            }
+        }
+        
+        Ok(canonical_path)
     }
 
     /// Scan all Claude data directories for JSONL files and parse usage data
@@ -143,6 +227,12 @@ impl FileBasedTokenMonitor {
 
     /// Parse a single JSONL file for usage entries
     async fn parse_jsonl_file(&self, file_path: &Path) -> Result<Vec<UsageEntry>> {
+        // Check file size before reading
+        let metadata = fs::metadata(file_path).await?;
+        if metadata.len() > MAX_FILE_SIZE as u64 {
+            return Err(anyhow!("File too large: {} bytes (max {} bytes)", metadata.len(), MAX_FILE_SIZE));
+        }
+        
         let content = fs::read_to_string(file_path).await?;
         let mut entries = Vec::new();
         
@@ -151,7 +241,14 @@ impl FileBasedTokenMonitor {
                 continue;
             }
             
-            match serde_json::from_str::<serde_json::Value>(line) {
+            // Check line size before parsing
+            if line.len() > MAX_JSON_SIZE {
+                log::warn!("Skipping oversized JSON line {} in {:?}: {} bytes (max {} bytes)", 
+                          line_num + 1, file_path, line.len(), MAX_JSON_SIZE);
+                continue;
+            }
+            
+            match self.parse_json_with_depth_limit(line) {
                 Ok(json) => {
                     match self.parse_usage_entry(json) {
                         Ok(entry) => {
@@ -175,6 +272,31 @@ impl FileBasedTokenMonitor {
         }
         
         Ok(entries)
+    }
+    
+    /// Parse JSON with depth limit to prevent stack overflow attacks
+    fn parse_json_with_depth_limit(&self, json_str: &str) -> Result<serde_json::Value> {
+        // Basic depth check by counting brackets
+        let mut depth = 0;
+        let mut max_depth = 0;
+        
+        for ch in json_str.chars() {
+            match ch {
+                '{' | '[' => {
+                    depth += 1;
+                    max_depth = max_depth.max(depth);
+                    if max_depth > MAX_JSON_DEPTH {
+                        return Err(anyhow!("JSON nesting too deep: {} levels (max {})", max_depth, MAX_JSON_DEPTH));
+                    }
+                }
+                '}' | ']' => depth = depth.saturating_sub(1),
+                _ => {}
+            }
+        }
+        
+        // Parse the JSON using serde_json
+        serde_json::from_str(json_str)
+            .map_err(|e| anyhow!("JSON parsing error: {}", e))
     }
 
     /// Parse a JSON value into a UsageEntry
@@ -361,7 +483,7 @@ impl FileBasedTokenMonitor {
     }
 
     /// Start file system watcher for real-time updates
-    pub fn start_file_watcher(&self) -> Result<mpsc::Receiver<notify::Result<Event>>> {
+    pub fn start_file_watcher(&mut self) -> Result<mpsc::Receiver<notify::Result<Event>>> {
         let (tx, rx) = mpsc::channel();
         
         let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
@@ -372,9 +494,8 @@ impl FileBasedTokenMonitor {
             log::info!("Watching directory for changes: {:?}", path);
         }
         
-        // Keep watcher alive by storing it in a static or similar
-        // For now, we'll return the receiver and let the caller manage the watcher
-        std::mem::forget(watcher);
+        // Store watcher in the struct to manage its lifetime properly
+        self._watcher = Some(Arc::new(Mutex::new(watcher)));
         
         Ok(rx)
     }

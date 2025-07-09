@@ -1,0 +1,20 @@
+[alias]
+# Security audit alias for easy dependency checking
+audit = "audit"
+outdated = "outdated"
+security-check = "run --bin security-check"
+
+[build]
+# Enable security features
+rustflags = [
+    "-C", "target-cpu=native",
+    "-C", "overflow-checks=on",
+    "-C", "force-frame-pointers=yes"
+]
+
+[target.'cfg(unix)']
+# Unix-specific security settings
+rustflags = [
+    "-C", "relocation-model=pic",
+    "-C", "code-model=small"
+]

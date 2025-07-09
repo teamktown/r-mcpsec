@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 
 /// Represents a Claude AI usage session with token tracking
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TokenSession {
     pub id: String,
     pub start_time: DateTime<Utc>,
@@ -13,6 +14,21 @@ pub struct TokenSession {
     pub tokens_limit: u32,
     pub is_active: bool,
     pub reset_time: DateTime<Utc>,
+}
+
+impl fmt::Debug for TokenSession {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TokenSession")
+            .field("id", &"[REDACTED]") // Redact session ID for privacy
+            .field("start_time", &self.start_time)
+            .field("end_time", &self.end_time)
+            .field("plan_type", &self.plan_type)
+            .field("tokens_used", &self.tokens_used)
+            .field("tokens_limit", &self.tokens_limit)
+            .field("is_active", &self.is_active)
+            .field("reset_time", &self.reset_time)
+            .finish()
+    }
 }
 
 /// Claude AI plan types with their respective limits
@@ -51,11 +67,21 @@ pub struct UsageMetrics {
 }
 
 /// Point-in-time token usage data
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TokenUsagePoint {
     pub timestamp: DateTime<Utc>,
     pub tokens_used: u32,
     pub session_id: String,
+}
+
+impl fmt::Debug for TokenUsagePoint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TokenUsagePoint")
+            .field("timestamp", &self.timestamp)
+            .field("tokens_used", &self.tokens_used)
+            .field("session_id", &"[REDACTED]") // Redact session ID for privacy
+            .finish()
+    }
 }
 
 /// User configuration settings
