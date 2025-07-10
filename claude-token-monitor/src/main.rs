@@ -248,7 +248,11 @@ async fn run_monitor(
                 let _ = ratatui_ui.cleanup();
                 result
             }
-            Err(e) => Err(e)
+            Err(e) => {
+                eprintln!("💡 Enhanced UI not available: {}", e);
+                eprintln!("   Falling back to summary display...");
+                Err(e)
+            }
         }
     };
     

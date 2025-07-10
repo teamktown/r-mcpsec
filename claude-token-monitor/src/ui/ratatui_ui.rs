@@ -1,5 +1,6 @@
 use crate::models::*;
 use anyhow::Result;
+use atty;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     execute,
@@ -34,6 +35,11 @@ pub struct RatatuiTerminalUI {
 impl RatatuiTerminalUI {
     /// Create new Ratatui terminal UI
     pub fn new(_config: UserConfig) -> Result<Self> {
+        // Check if we have a TTY available
+        if !atty::is(atty::Stream::Stdout) {
+            return Err(anyhow::anyhow!("TTY not available - interactive UI requires a terminal"));
+        }
+
         enable_raw_mode()?;
         let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen)?;
