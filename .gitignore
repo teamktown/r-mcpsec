@@ -139,7 +139,9 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 ./claude-token-monitor/target*
-claude-token-monitor/target*
+claude-token-monitor/target* 
+.swarm/
+
 
 .claude/
 .hive-mind/
