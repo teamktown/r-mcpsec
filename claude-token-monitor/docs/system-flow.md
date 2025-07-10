@@ -32,7 +32,7 @@ flowchart TD
     Q -->|config| U[Update Config]
     
     R --> V[Scan Usage Files]
-    V --> W[FileBasedTokenMonitor.scan_usage_files()]
+    V --> W["FileBasedTokenMonitor.scan_usage_files()"]
     W --> X[Find All .jsonl Files]
     X --> Y[Parse JSONL Entries]
     
@@ -43,7 +43,7 @@ flowchart TD
     CC --> DD[Deduplicate by Message/Request ID]
     
     DD --> EE[Derive Current Session]
-    EE --> FF[FileBasedTokenMonitor.derive_current_session()]
+    EE --> FF["FileBasedTokenMonitor.derive_current_session()"]
     FF --> GG[Find Most Recent Entry]
     GG --> HH[Calculate 5-Hour Session Window]
     HH --> II[Determine Session Activity]
@@ -51,7 +51,7 @@ flowchart TD
     JJ --> KK[Calculate Total Tokens in Session]
     
     KK --> LL[Calculate Metrics]
-    LL --> MM[FileBasedTokenMonitor.calculate_metrics()]
+    LL --> MM["FileBasedTokenMonitor.calculate_metrics()"]
     MM --> NN[Usage Rate = tokens/time_elapsed]
     NN --> OO[Session Progress = elapsed/duration]
     OO --> PP[Efficiency = expected/actual rate]
@@ -99,7 +99,7 @@ flowchart TD
 ```mermaid
 flowchart LR
     A[Claude Code Usage] --> B[~/.claude/projects/**/*.jsonl]
-    B --> C[FileBasedTokenMonitor.scan_usage_files()]
+    B --> C["FileBasedTokenMonitor.scan_usage_files()"]
     C --> D[Parse JSONL Lines]
     D --> E[Extract Usage Data]
     E --> F[TokenUsage Structure]
@@ -118,7 +118,7 @@ flowchart LR
     L --> M[Derive Session Information]
     M --> N[PASSIVE Session Creation]
     
-    N --> O[observed-{timestamp}]
+    N --> O["observed-{timestamp}"]
     O --> P[Calculate Session Metrics]
     P --> Q[Save to observed_sessions.json]
     

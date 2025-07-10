@@ -15,7 +15,7 @@
 		"vscode": {
 			"settings": {},
 			"extensions": [
-				"bierner.markdown-mermaid"
+				"bierner.markdown-mermaid","shd101wyy.markdown-preview-enhanced"
 			]
 		}
 	},

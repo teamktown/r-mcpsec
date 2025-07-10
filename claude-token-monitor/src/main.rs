@@ -443,8 +443,7 @@ fn show_about() {
     println!();
     
     println!("{}", "👨‍💻 Author:".bright_yellow().bold());
-    println!("  Chris Phillips");
-    println!("  Email: {}", "chris@adiuco.com".bright_blue());
+    println!("  Chris Phillips, Email: {}", "chris@adiuco.com".bright_blue());
     println!();
     
     println!("{}", "🛠️ Built Using:".bright_yellow().bold());
@@ -456,16 +455,7 @@ fn show_about() {
     
     println!("{}", "🙏 Attribution & Contributors:".bright_yellow().bold());
     println!("  Original concept by: {}", "@Maciek-roboblog".bright_cyan());
-    println!("  Based on: {}", "Claude-Code-Usage-Monitor".bright_white());
     println!("  Repository: {}", "https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor".bright_blue());
-    println!();
-    println!("  🌟 Contributors to the original project:");
-    println!("     See: https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor?tab=readme-ov-file#-contributors");
-    println!();
-    
-    println!("{}", "🔗 This Rust Implementation:".bright_yellow().bold());
-    println!("  Repository: {}", "https://github.com/teamktown/r-mcpsec/tree/main/claude-token-monitor".bright_blue());
-    println!("  License: MIT");
     println!();
     
     println!("{}", "💡 Usage:".bright_green().bold());
