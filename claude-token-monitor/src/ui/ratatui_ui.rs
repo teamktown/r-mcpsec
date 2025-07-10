@@ -755,24 +755,22 @@ fn draw_security_tab(frame: &mut Frame, area: Rect) {
     /// Draw about tab with author and usage information
 fn draw_about_tab(frame: &mut Frame, area: Rect) {
     // Version and Author Information
-    let version = env!("CARGO_PKG_VERSION");
-    let build_time = env!("CLAUDE_TOKEN_MONITOR_BUILD_TIME", "unknown");
+   // let version = env!("CARGO_PKG_VERSION");
+   // let build_time = env!("CLAUDE_TOKEN_MONITOR_BUILD_TIME", "unknown");
     
     let version_info = vec![
-        format!("📱 Claude Token Monitor v{}", version),
-        format!("🏗️  Built: {}", build_time),
+        "👨‍💻 Author: Chris Phillips, 📧 Email: tools-claude-token-monitor@adiuco.com".to_string(),
         "".to_string(),
-        "👨‍💻 Author: Chris Phillips, 📧 Email: chris@adiuco.com".to_string(),
-        "🛠️  Built using: ruv-swarm ⚙️  Language: Rust with Tokio + Ratatui".to_string(),
-        "🦀 This Rust Implementation:".to_string(),
-        "   • Repository: github.com/teamktown/r-mcpsec/claude-token-monitor".to_string(),
-        "   • License: MIT".to_string(),
-        "   • Refactored to Rust binary, passive file-based monitoring, enhanced details".to_string(),
+        "🛠️  Built using: ruv-swarm ⚙️  Language: Rust with Tokio + Ratatui  License: MIT".to_string(),
+          "".to_string(),
         "💡 Usage Tips:".to_string(),
         "   • Use --about flag for this information in CLI".to_string(),
         "   • Use --explain-how-this-works for technical details".to_string(),
         "   • Compatible with Claude Code's JSONL output files".to_string(),
         "   • Passive monitoring - no API keys or authentication required".to_string(),
+          "".to_string(),
+
+        "📚 Inspired by: @Maciek-roboblog's python Claude-Code-Usage-Monitor".to_string(),
     ];
 
     let version_items: Vec<ListItem> = version_info
