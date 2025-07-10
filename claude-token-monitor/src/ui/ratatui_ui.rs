@@ -211,23 +211,34 @@ impl RatatuiTerminalUI {
 
     /// Draw overview tab with key metrics
     fn draw_overview_tab(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
-        let chunks = Layout::default()
+        // Split the top area horizontally for session info and predictions
+        let vertical_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(8), // Session info
-                Constraint::Length(6), // Usage gauge
-                Constraint::Min(6),    // Statistics
+                Constraint::Length(10), // Top row: session info + predictions
+                Constraint::Length(6),  // Usage gauge
+                Constraint::Min(6),     // Statistics
             ])
             .split(area);
 
-        // Session information
-        Self::draw_session_info(frame, chunks[0], &metrics.current_session);
+        let top_row_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(50),
+                Constraint::Percentage(50),
+            ])
+            .split(vertical_chunks[0]);
+
+        // Left: Session information
+        Self::draw_session_info(frame, top_row_chunks[0], &metrics.current_session);
+        // Right: Session predictions and recommendations
+        Self::draw_session_predictions(frame, top_row_chunks[1], metrics);
 
         // Usage gauge
-        Self::draw_usage_gauge(frame, chunks[1], metrics);
+        Self::draw_usage_gauge(frame, vertical_chunks[1], metrics);
 
         // Statistics table
-        Self::draw_statistics_table(frame, chunks[2], metrics);
+        Self::draw_statistics_table(frame, vertical_chunks[2], metrics);
     }
 
     /// Draw charts tab with bar charts
