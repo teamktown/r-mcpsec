@@ -702,211 +702,83 @@ impl RatatuiTerminalUI {
         ]
     }
 
-    /// Draw security tab with security analysis summary
-    fn draw_security_tab(frame: &mut Frame, area: Rect) {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(6),  // Security Summary
-                Constraint::Length(10), // Vulnerability Assessment
-                Constraint::Min(8),     // Recommendations
-            ])
-            .split(area);
+/// Draw security tab with security recommendations
+fn draw_security_tab(frame: &mut Frame, area: Rect) {
+    // Recommendations
+    let recommendations = vec![
+        "🛡️ Security related aspects:".to_string(),
+        "• Memory safety via Rust ownership + overflow checks enabled".to_string(),
+        "• Comprehensive input validation with boundary checking".to_string(),
+        "• Resource limits prevent DoS attacks via malformed data".to_string(),
+        "• Path canonicalization in place".to_string(),
+        "• Information security through sensitive data redaction when debugging".to_string(),
+    ];
 
-        // Security Summary
-        let security_summary = vec![
-            "🔒 Security Analysis Summary".to_string(),
-            "".to_string(),
-            "Risk Level: LOW (IMPROVED ✅)".to_string(),
-            "All high/medium priority vulnerabilities FIXED".to_string(),
-            "Comprehensive security controls implemented".to_string(),
-            "Production-ready security posture achieved".to_string(),
-        ];
+    let rec_items: Vec<ListItem> = recommendations
+        .iter()
+        .map(|s| {
+            let color = if s.contains("✅") {
+                Color::Green
+            } else if s.contains("🛡️") {
+                Color::Cyan
+            } else if s.contains("📊") || s.contains("📋") {
+                Color::Blue
+            } else {
+                Color::White
+            };
+            ListItem::new(Line::from(s.as_str())).style(Style::default().fg(color))
+        })
+        .collect();
 
-        let summary_items: Vec<ListItem> = security_summary
-            .iter()
-            .map(|s| ListItem::new(Line::from(s.as_str())))
-            .collect();
+    let rec_list = List::new(rec_items)
+        .block(
+            Block::default()
+                .title("Security Recommendations")
+                .borders(Borders::ALL),
+        )
+        .style(Style::default().fg(Color::White));
 
-        let summary_list = List::new(summary_items)
-            .block(
-                Block::default()
-                    .title("Security Status")
-                    .borders(Borders::ALL),
-            )
-            .style(Style::default().fg(Color::Green));
+    frame.render_widget(rec_list, area);
+}
 
-        frame.render_widget(summary_list, chunks[0]);
+    /// Draw about tab with author and usage information
+fn draw_about_tab(frame: &mut Frame, area: Rect) {
+    // Version and Author Information
+    let version = env!("CARGO_PKG_VERSION");
+    let build_time = env!("CLAUDE_TOKEN_MONITOR_BUILD_TIME", "unknown");
+    
+    let version_info = vec![
+        format!("📱 Claude Token Monitor v{}", version),
+        format!("🏗️  Built: {}", build_time),
+        "".to_string(),
+        "👨‍💻 Author: Chris Phillips, 📧 Email: chris@adiuco.com".to_string(),
+        "🛠️  Built using: ruv-swarm ⚙️  Language: Rust with Tokio + Ratatui".to_string(),
+        "🦀 This Rust Implementation:".to_string(),
+        "   • Repository: github.com/teamktown/r-mcpsec/claude-token-monitor".to_string(),
+        "   • License: MIT".to_string(),
+        "   • Refactored to Rust binary, passive file-based monitoring, enhanced details".to_string(),
+        "💡 Usage Tips:".to_string(),
+        "   • Use --about flag for this information in CLI".to_string(),
+        "   • Use --explain-how-this-works for technical details".to_string(),
+        "   • Compatible with Claude Code's JSONL output files".to_string(),
+        "   • Passive monitoring - no API keys or authentication required".to_string(),
+    ];
 
-        // Vulnerability Assessment
-        let vulnerability_info = vec![
-            "✅ FIXED: Memory leak in file watcher - proper lifetime management".to_string(),
-            "✅ FIXED: Environment variables - comprehensive path validation".to_string(),
-            "✅ FIXED: JSON parsing - size/depth limits implemented".to_string(),
-            "✅ FIXED: Directory traversal - path canonicalization added".to_string(),
-            "✅ IMPROVED: Debug implementations - sensitive data redacted".to_string(),
-            "✅ ENHANCED: Security auditing - automated pipeline added".to_string(),
-            "🟢 STRENGTH: No unsafe blocks found in codebase".to_string(),
-            "🟢 STRENGTH: File-based monitoring reduces attack surface".to_string(),
-        ];
+    let version_items: Vec<ListItem> = version_info
+        .iter()
+        .map(|s| ListItem::new(Line::from(s.as_str())))
+        .collect();
 
-        let vuln_items: Vec<ListItem> = vulnerability_info
-            .iter()
-            .map(|s| {
-                let color = if s.contains("✅") {
-                    Color::Green
-                } else if s.contains("🟢") {
-                    Color::Cyan
-                } else {
-                    Color::White
-                };
-                ListItem::new(Line::from(s.as_str())).style(Style::default().fg(color))
-            })
-            .collect();
+    let version_list = List::new(version_items)
+        .block(
+            Block::default()
+                .title("Author & Usage Information")
+                .borders(Borders::ALL),
+        )
+        .style(Style::default().fg(Color::White));
 
-        let vuln_list = List::new(vuln_items)
-            .block(
-                Block::default()
-                    .title("Vulnerability Assessment")
-                    .borders(Borders::ALL),
-            )
-            .style(Style::default().fg(Color::White));
-
-        frame.render_widget(vuln_list, chunks[1]);
-
-        // Recommendations
-        let recommendations = vec![
-            "🔧 Security Status & Recommendations:".to_string(),
-            "".to_string(),
-            "✅ ALL HIGH PRIORITY FIXES COMPLETED:".to_string(),
-            "1. ✅ Memory leak FIXED: Proper lifetime management implemented".to_string(),
-            "2. ✅ Environment validation FIXED: Comprehensive path validation added".to_string(),
-            "3. ✅ JSON parsing FIXED: Size/depth limits implemented (1MB, 32 levels)".to_string(),
-            "".to_string(),
-            "✅ ALL MEDIUM PRIORITY FIXES COMPLETED:".to_string(),
-            "4. ✅ Path canonicalization FIXED: All file paths now canonicalized".to_string(),
-            "5. ✅ Debug implementations FIXED: Sensitive data redacted in logs".to_string(),
-            "6. ✅ Dependency auditing ADDED: Automated security pipeline created".to_string(),
-            "".to_string(),
-            "🛡️ CURRENT SECURITY STRENGTHS:".to_string(),
-            "• Memory safety via Rust ownership + overflow checks enabled".to_string(),
-            "• Comprehensive input validation with boundary checking".to_string(),
-            "• Resource limits prevent DoS attacks via malformed data".to_string(),
-            "• Information security through sensitive data redaction".to_string(),
-            "• Automated security monitoring and vulnerability detection".to_string(),
-            "".to_string(),
-            "📊 SECURITY POSTURE: EXCELLENT (LOW RISK)".to_string(),
-            "📋 Updated analysis: See SECURITY_ANALYSIS.md for comprehensive details".to_string(),
-        ];
-
-        let rec_items: Vec<ListItem> = recommendations
-            .iter()
-            .map(|s| {
-                let color = if s.contains("✅") {
-                    Color::Green
-                } else if s.contains("🛡️") {
-                    Color::Cyan
-                } else if s.contains("📊") || s.contains("📋") {
-                    Color::Blue
-                } else {
-                    Color::White
-                };
-                ListItem::new(Line::from(s.as_str())).style(Style::default().fg(color))
-            })
-            .collect();
-
-        let rec_list = List::new(rec_items)
-            .block(
-                Block::default()
-                    .title("Recommendations & Analysis")
-                    .borders(Borders::ALL),
-            )
-            .style(Style::default().fg(Color::White));
-
-        frame.render_widget(rec_list, chunks[2]);
-    }
-
-    /// Draw about tab with version, author, and attribution information
-    fn draw_about_tab(frame: &mut Frame, area: Rect) {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(8),  // Version & Author
-                Constraint::Min(12),    // Attribution & Contributors
-            ])
-            .split(area);
-
-        // Version and Author Information
-        let version = env!("CARGO_PKG_VERSION");
-        let build_time = env!("CLAUDE_TOKEN_MONITOR_BUILD_TIME", "unknown");
-        
-        let version_info = vec![
-            format!("📱 Claude Token Monitor v{}", version),
-            format!("🏗️  Built: {}", build_time),
-            "".to_string(),
-            "👨‍💻 Author: Chris Phillips".to_string(),
-            "📧 Email: chris@adiuco.com".to_string(),
-            "🛠️  Built using: ruv-swarm".to_string(),
-            "⚙️  Language: Rust with Tokio + Ratatui".to_string(),
-        ];
-
-        let version_items: Vec<ListItem> = version_info
-            .iter()
-            .map(|s| ListItem::new(Line::from(s.as_str())))
-            .collect();
-
-        let version_list = List::new(version_items)
-            .block(
-                Block::default()
-                    .title("Version & Author")
-                    .borders(Borders::ALL),
-            )
-            .style(Style::default().fg(Color::White));
-
-        frame.render_widget(version_list, chunks[0]);
-
-        // Attribution and Contributors
-        let attribution_info = vec![
-            "🙏 Attribution & Contributors:".to_string(),
-            "".to_string(),
-            "📚 Original Concept:".to_string(),
-            "   • Created by: @Maciek-roboblog".to_string(),
-            "   • Project: Claude-Code-Usage-Monitor".to_string(),
-            "   • Repository: github.com/Maciek-roboblog/Claude-Code-Usage-Monitor".to_string(),
-            "".to_string(),
-            "🌟 Contributors to Original Project:".to_string(),
-            "   See: github.com/Maciek-roboblog/Claude-Code-Usage-Monitor".to_string(),
-            "        #-contributors section for full list".to_string(),
-            "".to_string(),
-            "🦀 This Rust Implementation:".to_string(),
-            "   • Repository: github.com/teamktown/r-mcpsec/claude-token-monitor".to_string(),
-            "   • License: MIT".to_string(),
-            "   • Refactored for PASSIVE file-based monitoring approach".to_string(),
-            "   • Enhanced with real-time file watching capabilities".to_string(),
-            "   • Tool observes sessions, doesn't create or manage them".to_string(),
-            "".to_string(),
-            "💡 Usage Tips:".to_string(),
-            "   • Use --about flag for this information in CLI".to_string(),
-            "   • Use --explain-how-this-works for technical details".to_string(),
-            "   • Compatible with Claude Code's JSONL output files".to_string(),
-            "   • Completely passive - no session management".to_string(),
-        ];
-
-        let attribution_items: Vec<ListItem> = attribution_info
-            .iter()
-            .map(|s| ListItem::new(Line::from(s.as_str())))
-            .collect();
-
-        let attribution_list = List::new(attribution_items)
-            .block(
-                Block::default()
-                    .title("Attribution & Contributors")
-                    .borders(Borders::ALL),
-            )
-            .style(Style::default().fg(Color::Cyan));
-
-        frame.render_widget(attribution_list, chunks[1]);
-    }
+    frame.render_widget(version_list, area);
+}
 
     /// Draw session information panel
     fn draw_session_info(frame: &mut Frame, area: Rect, session: &TokenSession) {
