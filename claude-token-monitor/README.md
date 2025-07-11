@@ -380,6 +380,6 @@ MIT License - see LICENSE file for details.
 
 ---
 
-**Author:** Chris Phillips <chris@chrisphillips.ca>  
-**Version:** 0.2.1  
+**Author:** Chris Phillips <chris@adiuco.com>  
+**Version:** 0.2.4  
 **License:** MIT

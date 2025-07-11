@@ -443,7 +443,7 @@ fn show_about() {
     println!();
     
     println!("{}", "👨‍💻 Author:".bright_yellow().bold());
-    println!("  Chris Phillips, Email: {}", "chris@adiuco.com".bright_blue());
+    println!("  Chris Phillips, Email: {}", "tools-claude-token-monitor@adiuco.com".bright_blue());
     println!();
     
     println!("{}", "🛠️ Built Using:".bright_yellow().bold());
