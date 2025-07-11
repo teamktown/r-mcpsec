@@ -1,21 +1,47 @@
-# Claude Token Monitor - Rust Edition
+# Claude Token Monitor - File-Based Edition
 
-🧠 **v0.2.1** - A lightweight, high-performance Rust client for monitoring Claude AI token usage with enhanced Ratatui terminal interface.
+🧠 **v0.2.4** - A lightweight, high-performance Rust tool for monitoring Claude AI token usage by reading local files created by Claude Code.
 
 ## Features
 
-- 🔥 **Real-time monitoring** with customizable update intervals
-- 📊 **Enhanced Ratatui UI** with interactive tabs and visual progress bars
-- 🤖 **Smart predictions** for token depletion timing
-- 📈 **Usage analytics** and efficiency scoring
-- 🔄 **Session management** with persistent storage
-- ⚡ **Lightning fast** - built with Rust for performance
+- 📁 **File-based monitoring** - No API keys or authentication required
+- 🔍 **Passive observation** - Reads Claude Code's JSONL usage files
+- 📊 **Enhanced Ratatui UI** with 7 interactive tabs and visual progress bars
+- 🤖 **Smart predictions** for token depletion timing based on observed usage
+- 📈 **Usage analytics** and efficiency scoring from real usage data
+- 🔄 **Session observation** with persistent storage of observed sessions
+- ⚡ **Lightning fast** - built with Rust for performance and memory safety
 - 🛠️ **Configurable** plans and thresholds
 - 📱 **Cross-platform** support (Linux, macOS, Windows)
-- 🔑 **OAuth Integration** - Supports ~/.claude/.credentials.json
+- 🔒 **Privacy-focused** - All processing happens locally, no network connections
 - 🕐 **Human-friendly time formatting** using humantime library
+- ⚙️ **Real-time file watching** for automatic updates when Claude Code writes new data
+
+## How It Works
+
+This tool monitors your Claude AI token usage by **passively reading local files** that Claude Code writes during your conversations. It requires **no API calls, authentication, or network access** - everything happens locally by observing the usage data Claude Code already creates.
+
+### What Files It Monitors
+
+- `~/.claude/projects/**/*.jsonl` (primary location)
+- `~/.config/claude/projects/**/*.jsonl` (alternative location)  
+- Custom paths from `CLAUDE_DATA_PATHS` or `CLAUDE_DATA_PATH` environment variables
+
+### What Data It Reads
+
+- Token usage counts (input, output, cache tokens)
+- Timestamps of each Claude interaction
+- Model information and session identifiers
+- Request and message IDs (for deduplication)
+
+The tool **never reads conversation content** - only the token usage metadata that Claude Code logs.
 
 ## Installation
+
+### Prerequisites
+
+1. **Claude Code** must be installed and configured
+2. **Rust** toolchain (if building from source)
 
 ### From Source
 
@@ -40,67 +66,70 @@ cargo install --path .
 
 ### Quick Start
 
-Start monitoring with enhanced Ratatui interface (default):
+1. **Use Claude Code** to have a conversation (this creates the usage files)
+2. **Start monitoring** with enhanced Ratatui interface:
 ```bash
 claude-token-monitor
 ```
 
-Use basic terminal UI:
+For basic terminal UI:
 ```bash
 claude-token-monitor --basic-ui
 ```
 
+For development/testing with mock data:
+```bash
+claude-token-monitor --force-mock
+```
+
 ### Commands
 
-#### Monitor in Real-time
+#### Monitor in Real-time (Passive Observation)
 ```bash
 # Start monitoring with Pro plan (uses Ratatui interface by default)
 claude-token-monitor monitor --plan pro
 
-# Monitor with custom update interval
+# Monitor with custom update interval  
 claude-token-monitor monitor --plan max5 --interval 5
 
 # Use basic terminal UI instead of Ratatui
 claude-token-monitor monitor --basic-ui
+
+# Default monitoring (same as 'monitor' command)
+claude-token-monitor
 ```
 
-#### Session Management
+#### Session Observation (Read-Only)
 ```bash
-# Create a new session
-claude-token-monitor create --plan pro
-
-# Check current session status
+# Check observed session status from JSONL files
 claude-token-monitor status
 
-# End current session
-claude-token-monitor end
-
-# View session history
+# View observed session history
 claude-token-monitor history --limit 20
 ```
 
 #### Configuration
 ```bash
-# Set default plan
+# Set default plan hint for calculations
 claude-token-monitor config --plan max20
 
-# Set update interval
+# Set update interval for file scanning
 claude-token-monitor config --interval 2
 
 # Set warning threshold (85% = 0.85)
 claude-token-monitor config --threshold 0.9
 ```
 
-#### Authentication
+#### Information and Help
 ```bash
-# Check authentication status
-claude-token-monitor auth status
+# Get detailed explanation of how the tool works
+claude-token-monitor --explain-how-this-works
 
-# Validate credentials
-claude-token-monitor auth validate
+# Show version and author information
+claude-token-monitor --about
 
-# Get help with authentication
-claude-token-monitor auth help
+# Get help with all commands
+claude-token-monitor --help
 ```
 
 ### Plan Types
@@ -112,64 +141,85 @@ claude-token-monitor auth help
 
 ## Enhanced Ratatui Interface
 
-The new enhanced interface provides tabbed navigation:
+The enhanced interface provides 7 interactive tabs with comprehensive monitoring:
 
-### Tab 1: Overview
-- Real-time token usage with horizontal bar chart
-- Session progress gauge
-- Current usage statistics
-- Predictions and recommendations
+### Tab 0: Overview
+- Real-time observed session information with status indicators
+- Token usage gauge with color-coded warnings
+- Current usage statistics table (rate, progress, efficiency)
+- Session predictions and recommendations
 
-### Tab 2: Session Details
-- Session ID and metadata
-- Plan type and limits
-- Start time and reset time (human-readable format)
-- Status indicator
+### Tab 1: Charts  
+- Token usage distribution (used vs remaining) with horizontal bar charts
+- Usage history visualization with time-based progression
+- Visual representation of token consumption patterns
 
-### Tab 3: Analytics
-- Usage rate metrics
-- Efficiency scoring
-- Projected depletion time
-- Historical usage patterns
+### Tab 2: Session
+- Detailed observed session information (ID, plan, dates)
+- Session predictions with depletion timing
+- Usage efficiency recommendations based on patterns
 
-### Tab 4: Help
-- Keyboard shortcuts
-- Available commands
-- Configuration options
+### Tab 3: Details (Interactive)
+- Navigable detail categories with drill-down capability
+- Token breakdown, usage rate analysis, session timeline
+- Cache token details, model information, file sources
+- Performance metrics and recent activity summaries
+
+### Tab 4: Security
+- Security recommendations and analysis
+- Memory safety, input validation, and resource protection status
+- Information security and build security features
+
+### Tab 5: Settings
+- Current configuration display
+- Technical details about passive monitoring data flow
+- File operation explanations and calculation formulas
+
+### Tab 6: About
+- Author and version information
+- Usage tips and Claude Code integration details
+- Attribution and build information
 
 **Navigation:**
 - `Tab` / `Shift+Tab`: Switch between tabs
-- `q` / `Ctrl+C`: Quit application
-- `r`: Refresh data
-- `h`: Show help
+- `q` / `Esc` / `Ctrl+C`: Quit application  
+- `r`: Refresh data (rescans files)
+- `↑↓`: Scroll within tabs
+- `←→`: Navigate details (Tab 3 only)
 
-## Authentication
+## File Discovery and Configuration
 
-### Claude CLI Integration
+### Automatic File Discovery
 
-The monitor automatically detects and uses Claude CLI credentials from:
-```
-~/.claude/.credentials.json
-```
+The monitor automatically discovers Claude Code usage files from these locations:
 
-### Environment Variables
-
-You can also set:
 ```bash
-export CLAUDE_API_KEY="your-api-key-here"
+# Primary location (most common)
+~/.claude/projects/**/*.jsonl
+
+# Alternative location  
+~/.config/claude/projects/**/*.jsonl
 ```
 
-### Command Line
+### Custom Paths
 
-Pass API key directly:
+You can specify custom paths using environment variables:
+
 ```bash
-claude-token-monitor --api-key "your-api-key-here"
+# Multiple paths (colon-separated)
+export CLAUDE_DATA_PATHS="/path/to/claude/data:/another/path"
+
+# Single path
+export CLAUDE_DATA_PATH="/custom/claude/data"
 ```
 
-The application will check credential sources in this order:
-1. Command line `--api-key` flag
-2. Claude CLI credentials file
-3. Environment variables
+### Security and Validation
+
+All file paths are automatically:
+- **Validated** for security (no path traversal, null bytes, etc.)
+- **Canonicalized** to resolve symlinks and normalize paths  
+- **Bounded** to safe directories (home directory or allowed system paths)
+- **Size-limited** to prevent resource exhaustion (50MB max per file)
 
 ## Configuration
 
@@ -199,78 +249,80 @@ Example configuration:
 
 ## Architecture
 
-The client is built with a modular architecture:
+The tool is built with a modular, file-based monitoring architecture:
 
 ```
 src/
 ├── main.rs              # CLI interface and command handling
 ├── lib.rs               # Library exports
 ├── models/
-│   ├── mod.rs          # Data structures (TokenSession, UsageMetrics, etc.)
-│   ├── api.rs          # API response models
-│   └── credentials.rs  # OAuth credential management
+│   └── mod.rs          # Data structures (TokenSession, UsageMetrics, etc.)
 ├── services/
-│   ├── mod.rs          # Service traits and interfaces
-│   ├── session_tracker.rs  # Session management and persistence
+│   ├── mod.rs          # Service traits and interfaces  
+│   ├── session_tracker.rs   # Session observation and persistence
 │   ├── token_monitor.rs     # Real-time monitoring logic
-│   └── api_client.rs        # Claude API client with OAuth
-├── ui/
-│   ├── mod.rs          # Basic terminal UI
-│   └── ratatui_ui.rs   # Enhanced Ratatui interface
-└── commands/
-    └── auth.rs         # Authentication commands
+│   └── file_monitor.rs      # File-based JSONL parsing and analysis
+└── ui/
+    ├── mod.rs          # Basic terminal UI interface
+    └── ratatui_ui.rs   # Enhanced 7-tab Ratatui interface
 ```
+
+### Key Design Principles
+
+- **Passive Monitoring**: Only reads existing files, never writes to Claude Code data
+- **No Network Access**: Everything happens locally, no API calls required
+- **Security First**: Comprehensive input validation and memory safety
+- **Real-time Updates**: File system watching for immediate updates
+- **Privacy Focused**: No conversation content access, only token metadata
 
 ## System Flow
 
-The application follows a structured data flow from startup to monitoring:
+The application follows a file-based passive monitoring flow:
 
 ```mermaid
 flowchart TD
     A[Application Start] --> B[Parse CLI Arguments]
     B --> C{--force-mock flag?}
-    C -->|Yes| D[Initialize Mock TokenMonitor]
-    C -->|No| E[Check Credentials]
+    C -->|Yes| D[Initialize Mock Data]
+    C -->|No| E[Initialize FileBasedTokenMonitor]
     
-    E --> F[Try CLI Args --api-key]
-    F --> G{API Key Found?}
-    G -->|Yes| H[Create ApiClient]
-    G -->|No| I[Try ~/.claude/.credentials.json]
-    I --> J{Credentials Found?}
-    J -->|Yes| H
-    J -->|No| K[Try Environment Variables]
-    K --> L{CLAUDE_API_KEY set?}
-    L -->|Yes| H
-    L -->|No| M[❌ Exit with Error]
+    E --> F[Discover Claude Data Paths]
+    F --> G[~/.claude/projects/**/*.jsonl]
+    F --> H[Environment Variables CLAUDE_DATA_PATHS]
     
-    H --> N[Test API Connection]
-    N --> O{Connection OK?}
-    O -->|Yes| P[Create Real TokenMonitor]
-    O -->|No| M
+    G --> I[Validate & Canonicalize Paths]
+    H --> I
+    I --> J[Create SessionTracker for Observation]
+    J --> K[Load Data Directory]
+    K --> L[Start Monitoring Loop]
     
-    D --> Q[Load Data Directory]
-    P --> Q
-    Q --> R[SessionTracker loads sessions.json]
-    R --> S[Start Monitoring Loop]
-    S --> T[Fetch Current Token Usage]
-    T --> U[Calculate Metrics]
-    U --> V[Update UI]
-    V --> W[Save Session State]
-    W --> X{Continue?}
-    X -->|Yes| S
-    X -->|No| Y[Exit]
+    L --> M[Scan Usage Files]
+    M --> N[Parse JSONL Entries]
+    N --> O[Extract Token Usage Data]
+    O --> P[Derive Current Session]
+    P --> Q[Calculate Metrics]
+    Q --> R[Update UI Display]
+    R --> S[Save Observed State]
+    S --> T{Continue Monitoring?}
+    T -->|Yes| L
+    T -->|No| U[Exit]
+    
+    style E fill:#e8f5e8
+    style M fill:#e3f2fd
+    style N fill:#fff3e0
+    style R fill:#f3e5f5
 ```
 
 For detailed technical flow diagrams, see [docs/system-flow.md](docs/system-flow.md).
 
 ### Key Components
 
-- **TokenSession**: Represents a Claude usage session with metadata
-- **SessionTracker**: Manages session lifecycle and persistence
-- **TokenMonitor**: Real-time monitoring with async updates
-- **RatatuiTerminalUI**: Enhanced tabbed interface with interactive elements
-- **ApiClient**: OAuth-enabled Claude API client
-- **CredentialManager**: Handles multiple credential sources
+- **TokenSession**: Represents an observed Claude usage session with metadata
+- **SessionTracker**: Observes and persists session data from JSONL files
+- **FileBasedTokenMonitor**: Scans and parses Claude Code's JSONL usage files
+- **TokenMonitor**: Real-time monitoring with async file watching
+- **RatatuiTerminalUI**: Enhanced 7-tab interface with interactive navigation
+- **UsageEntry**: Represents individual token usage events from JSONL data
 
 ## Performance
 
@@ -313,24 +365,24 @@ cargo fmt
 cargo check
 ```
 
-## API Integration
+## File Monitoring Features
 
-The monitor now includes full Claude API integration with:
+The monitor includes comprehensive file-based monitoring with:
 
-- **OAuth credentials** support
-- **Retry logic** with exponential backoff
-- **Rate limiting** awareness
-- **Error handling** for API failures
-- **Connection testing** on startup
+- **Real-time file watching** using the notify crate for instant updates
+- **JSONL parsing** with security limits (1MB per line, 32 levels max depth)
+- **Automatic deduplication** based on message IDs and request IDs
+- **Session derivation** from usage patterns (5-hour windows)
+- **Multi-path support** for different Claude Code installation locations
 
 ## Mock Mode
 
-For development and testing only:
+For development and testing when no Claude Code data is available:
 ```bash
 claude-token-monitor --force-mock
 ```
 
-This forces the use of simulated data instead of real API calls. The application will no longer automatically fallback to mock mode if API connection fails.
+This generates realistic simulated usage data for development purposes. The application no longer automatically falls back to mock mode - it must be explicitly enabled.
 
 ## Contributing
 
@@ -347,23 +399,32 @@ MIT License - see LICENSE file for details.
 
 ## Changelog
 
-### v0.2.1
+### v0.2.4 (Current)
+- 📁 **File-based monitoring architecture** - Complete rewrite for passive observation
+- 🔍 **JSONL file parsing** - Reads Claude Code's usage files directly
+- 🛡️ **Security hardening** - Comprehensive input validation and memory safety
+- 📊 **7-tab Ratatui interface** - Overview, Charts, Session, Details, Security, Settings, About
+- ⚡ **Real-time file watching** - Automatic updates when Claude Code writes new data
+- 🔒 **Privacy-focused design** - No network access, all processing local
+- 📋 **Session observation** - Derives sessions from usage patterns rather than API calls
+- 🎯 **Accurate calculations** - Usage rates, efficiency scores, and depletion predictions
+
+### v0.2.3
 - 🔧 Removed automatic fallback to mock mode (now requires --force-mock)
 - 📋 Enhanced Settings tab with comprehensive technical documentation
 - 📊 Added detailed system flow diagrams and architecture documentation
-- 🔍 Improved error messages with actionable guidance for credential setup
-- 💡 Added "How It Works" section explaining real code flow and calculations
+- 🔍 Improved error messages with actionable guidance for file discovery
+- 💡 Added "How It Works" section explaining passive monitoring approach
 - 📚 Created docs/system-flow.md with complete technical diagrams
 
-### v0.2.0
+### v0.2.0-0.2.2
 - ✨ Enhanced Ratatui interface with tabbed navigation
-- 🔑 OAuth integration with Claude CLI credentials
 - 🕐 Human-friendly time formatting with humantime library
 - 📊 Interactive horizontal bar charts and gauges
 - 🎨 Professional UI with color coding and real-time updates
 - 🔧 Improved CLI argument structure (--basic-ui flag)
 - 📈 Enhanced session analytics and predictions
-- 🛠️ Better error handling and connection testing
+- 🛠️ Better error handling and file discovery
 
 ### v0.1.0
 - 🚀 Initial release with basic monitoring
@@ -380,6 +441,9 @@ MIT License - see LICENSE file for details.
 
 ---
 
-**Author:** Chris Phillips <chris@adiuco.com>  
+**Author:** Chris Phillips <tools-claude-token-monitor@adiuco.com>  
 **Version:** 0.2.4  
-**License:** MIT
+**License:** MIT  
+**Repository:** https://github.com/teamktown/claude-token-monitor
+
+**⚠️ Important:** This tool requires Claude Code to be installed and used first to generate the JSONL usage files it monitors. It's a passive monitoring tool that reads existing data, not a replacement for Claude Code itself.
