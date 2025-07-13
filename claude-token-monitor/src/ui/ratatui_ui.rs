@@ -820,7 +820,9 @@ fn draw_about_tab(frame: &mut Frame, area: Rect) {
         "   • Use --about flag for this information in CLI".to_string(),
         "   • Use --explain-how-this-works for technical details".to_string(),
         "   • Compatible with Claude Code's JSONL output files".to_string(),
-        "   • Passive monitoring - no API keys or authentication required".to_string()];
+        "   • Passive monitoring - no API keys or authentication required".to_string(),
+        "📚 Inspired by: @Maciek-roboblog's python Claude-Code-Usage-Monitor".to_string(),
+    ];
 
     let version_items: Vec<ListItem> = version_info
         .iter()
