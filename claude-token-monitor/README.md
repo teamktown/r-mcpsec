@@ -1,12 +1,14 @@
 # Claude Token Monitor - File-Based Edition
 
-🧠 **v0.2.4** - A lightweight, high-performance Rust tool for monitoring Claude AI token usage by reading local files created by Claude Code.
+🧠 **v0.2.6** - A lightweight, high-performance Rust tool for monitoring Claude AI token usage by reading local files created by Claude Code.
 
 ## Features
 
 - 📁 **File-based monitoring** - No API keys or authentication required
 - 🔍 **Passive observation** - Reads Claude Code's JSONL usage files
-- 📊 **Enhanced Ratatui UI** with 7 interactive tabs and visual progress bars
+- 📊 **Enhanced Ratatui UI** with 7 interactive tabs and dual view modes
+- 🎯 **Advanced Analytics** - Cache metrics, real-time dashboards, and time-series charts
+- 🔄 **Dual Overview Modes** - General and Detailed views with comprehensive session analytics
 - 🤖 **Smart predictions** for token depletion timing based on observed usage
 - 📈 **Usage analytics** and efficiency scoring from real usage data
 - 🔄 **Session observation** with persistent storage of observed sessions
@@ -16,6 +18,8 @@
 - 🔒 **Privacy-focused** - All processing happens locally, no network connections
 - 🕐 **Human-friendly time formatting** using humantime library
 - ⚙️ **Real-time file watching** for automatic updates when Claude Code writes new data
+- 📝 **Advanced Logging** - Verbose debug mode with file output for troubleshooting
+- 🔧 **Debug Mode** - Comprehensive debugging tools for input handling and UI issues
 
 ## How It Works
 
@@ -29,12 +33,14 @@ This tool monitors your Claude AI token usage by **passively reading local files
 
 ### What Data It Reads
 
-- Token usage counts (input, output, cache tokens)
+- Token usage counts (input, output, cache creation, cache read tokens)
 - Timestamps of each Claude interaction
 - Model information and session identifiers
 - Request and message IDs (for deduplication)
+- Cache hit rates and creation patterns
+- Token consumption efficiency metrics
 
-The tool **never reads conversation content** - only the token usage metadata that Claude Code logs.
+The tool reads token usage metadata that Claude Code logs and recommend you review what Claude is logging.
 
 ## Installation
 
@@ -82,12 +88,20 @@ For development/testing with mock data:
 claude-token-monitor --force-mock
 ```
 
+For verbose debugging with file logging:
+```bash
+claude-token-monitor --verbose
+```
+
 ### Commands
 
 #### Monitor in Real-time (Passive Observation)
 ```bash
 # Start monitoring with Pro plan (uses Ratatui interface by default)
 claude-token-monitor monitor --plan pro
+
+# Monitor with verbose logging
+claude-token-monitor monitor --plan max5 --verbose
 
 # Monitor with custom update interval  
 claude-token-monitor monitor --plan max5 --interval 5
@@ -143,11 +157,26 @@ claude-token-monitor --help
 
 The enhanced interface provides 7 interactive tabs with comprehensive monitoring:
 
-### Tab 0: Overview
+### Tab 0: Overview (Dual View Mode)
+
+**NEW in v0.2.6:** Toggle between General and Detailed views using the **'V'** key!
+
+#### General View (Simple)
 - Real-time observed session information with status indicators
-- Token usage gauge with color-coded warnings
-- Current usage statistics table (rate, progress, efficiency)
+- Time-series strip chart showing cumulative token usage over time
 - Session predictions and recommendations
+
+#### Detailed View (Advanced Analytics)
+- **Real-time Metrics Dashboard** with 4-panel layout:
+  - **Token Consumption**: Rate (tokens/min) and Input/Output ratio
+  - **Cache Analytics**: Hit rate percentage and cache creation rate
+  - **Session Progress**: Progress percentage and remaining tokens
+  - **Efficiency**: Efficiency score and projected depletion time
+- **Stacked Time-Series Chart** with multiple token type datasets:
+  - Total tokens (green line)
+  - Input tokens (blue line)  
+  - Output tokens (yellow line)
+- **Enhanced JSONL File Display** showing monitored file patterns
 
 ### Tab 1: Charts  
 - Token usage distribution (used vs remaining) with horizontal bar charts
@@ -181,11 +210,60 @@ The enhanced interface provides 7 interactive tabs with comprehensive monitoring
 - Attribution and build information
 
 **Navigation:**
-- `Tab` / `Shift+Tab`: Switch between tabs
+- `Tab` / `N` / `Shift+Tab`: Switch between tabs
+- `V`: Toggle Overview view mode (General ↔ Detailed) - **NEW!**
 - `q` / `Esc` / `Ctrl+C`: Quit application  
 - `r`: Refresh data (rescans files)
 - `↑↓`: Scroll within tabs
 - `←→`: Navigate details (Tab 3 only)
+
+## Advanced Analytics Features (v0.2.6)
+
+### Cache Metrics Tracking
+- **Cache Hit Rate**: Percentage of cache read tokens vs total input tokens
+- **Cache Creation Rate**: Cache creation tokens per minute
+- **Cache Efficiency**: Real-time analysis of cache utilization patterns
+
+### Enhanced Session Analytics
+- **Token Consumption Rate**: Real-time tokens per minute tracking
+- **Input/Output Ratio**: Analysis of conversation efficiency
+- **Session Progress**: Advanced progress tracking with predictive analytics
+- **Efficiency Scoring**: Comprehensive efficiency metrics based on usage patterns
+
+### Time-Series Visualization
+- **Stacked Charts**: Multiple token type datasets overlaid on time progression
+- **Real-time Updates**: Charts update automatically as new JSONL entries are detected
+- **Performance Optimization**: Data sampling for large datasets maintains responsive UI
+
+## Debugging and Logging
+
+### Verbose Mode
+Enable comprehensive debugging with file-based logging:
+
+```bash
+# Enable verbose logging (writes to debug.log)
+claude-token-monitor --verbose
+```
+
+When `--verbose` is enabled:
+- **Debug-level logging** to `debug.log` file
+- **Detailed key event tracking** for UI troubleshooting
+- **Tab switching diagnostics** for navigation issues
+- **File monitoring operations** logged with timestamps
+- **Cache metrics calculations** with detailed analytics
+- **Session derivation logic** tracking
+
+### Debug Features
+- **Comprehensive key event logging** with code, modifiers, and current tab state
+- **Tab switching debugging** with before/after state tracking
+- **Alternative navigation keys** (`N` key as backup for Tab)
+- **Input handling diagnostics** for troubleshooting UI responsiveness
+- **Main loop iteration tracking** with exit condition monitoring
+
+### Log File Location
+- Debug logs are written to `debug.log` in the current working directory
+- Normal operation logs (info/warn/error) continue to stderr
+- Log files include timestamps and structured debugging information
 
 ## File Discovery and Configuration
 
@@ -274,6 +352,8 @@ src/
 - **Security First**: Comprehensive input validation and memory safety
 - **Real-time Updates**: File system watching for immediate updates
 - **Privacy Focused**: No conversation content access, only token metadata
+- **Advanced Analytics**: Cache metrics and efficiency tracking
+- **Debugging Support**: Comprehensive logging and diagnostic tools
 
 ## System Flow
 
@@ -282,35 +362,39 @@ The application follows a file-based passive monitoring flow:
 ```mermaid
 flowchart TD
     A[Application Start] --> B[Parse CLI Arguments]
-    B --> C{--force-mock flag?}
-    C -->|Yes| D[Initialize Mock Data]
-    C -->|No| E[Initialize FileBasedTokenMonitor]
+    B --> C{--verbose flag?}
+    C -->|Yes| D[Initialize Debug Logging to file]
+    C -->|No| E[Initialize Standard Logging]
+    D --> F[Initialize FileBasedTokenMonitor]
+    E --> F
     
-    E --> F[Discover Claude Data Paths]
-    F --> G[~/.claude/projects/**/*.jsonl]
-    F --> H[Environment Variables CLAUDE_DATA_PATHS]
+    F --> G[Discover Claude Data Paths]
+    G --> H[~/.claude/projects/**/*.jsonl]
+    G --> I[Environment Variables CLAUDE_DATA_PATHS]
     
-    G --> I[Validate & Canonicalize Paths]
-    H --> I
-    I --> J[Create SessionTracker for Observation]
-    J --> K[Load Data Directory]
-    K --> L[Start Monitoring Loop]
+    H --> J[Validate & Canonicalize Paths]
+    I --> J
+    J --> K[Create SessionTracker for Observation]
+    K --> L[Load Data Directory]
+    L --> M[Start Monitoring Loop]
     
-    L --> M[Scan Usage Files]
-    M --> N[Parse JSONL Entries]
-    N --> O[Extract Token Usage Data]
-    O --> P[Derive Current Session]
-    P --> Q[Calculate Metrics]
-    Q --> R[Update UI Display]
-    R --> S[Save Observed State]
-    S --> T{Continue Monitoring?}
-    T -->|Yes| L
-    T -->|No| U[Exit]
+    M --> N[Scan Usage Files]
+    N --> O[Parse JSONL Entries]
+    O --> P[Extract Token Usage Data]
+    P --> Q[Calculate Enhanced Analytics]
+    Q --> R[Derive Current Session]
+    R --> S[Calculate Metrics]
+    S --> T[Update UI Display]
+    T --> U[Save Observed State]
+    U --> V{Continue Monitoring?}
+    V -->|Yes| M
+    V -->|No| W[Exit]
     
-    style E fill:#e8f5e8
-    style M fill:#e3f2fd
-    style N fill:#fff3e0
-    style R fill:#f3e5f5
+    style F fill:#e8f5e8
+    style N fill:#e3f2fd
+    style O fill:#fff3e0
+    style Q fill:#f0f4ff
+    style T fill:#f3e5f5
 ```
 
 For detailed technical flow diagrams, see [docs/system-flow.md](docs/system-flow.md).
@@ -321,17 +405,19 @@ For detailed technical flow diagrams, see [docs/system-flow.md](docs/system-flow
 - **SessionTracker**: Observes and persists session data from JSONL files
 - **FileBasedTokenMonitor**: Scans and parses Claude Code's JSONL usage files
 - **TokenMonitor**: Real-time monitoring with async file watching
-- **RatatuiTerminalUI**: Enhanced 7-tab interface with interactive navigation
+- **RatatuiTerminalUI**: Enhanced 7-tab interface with dual view modes
 - **UsageEntry**: Represents individual token usage events from JSONL data
+- **UsageMetrics**: Enhanced metrics with cache analytics and efficiency tracking
 
 ## Performance
 
 Built with Rust for maximum performance:
-- **Memory efficient**: Minimal memory footprint
-- **Fast startup**: Sub-second initialization
+- **Memory efficient**: Minimal memory footprint with optimized data structures
+- **Fast startup**: Sub-second initialization with intelligent caching
 - **Concurrent**: Async/await for non-blocking operations
 - **Cross-platform**: Works on Linux, macOS, and Windows
 - **Real-time updates**: Efficient polling with configurable intervals
+- **Responsive UI**: 50ms refresh rate with data sampling for large datasets
 
 ## Development
 
@@ -365,6 +451,19 @@ cargo fmt
 cargo check
 ```
 
+### Debug Mode Development
+
+```bash
+# Run with verbose debugging
+cargo run --release -- --verbose
+
+# Test tab switching with debug output
+cargo run --release -- --verbose 2> debug_output.log
+
+# Monitor debug log in real-time
+tail -f debug.log
+```
+
 ## File Monitoring Features
 
 The monitor includes comprehensive file-based monitoring with:
@@ -374,6 +473,7 @@ The monitor includes comprehensive file-based monitoring with:
 - **Automatic deduplication** based on message IDs and request IDs
 - **Session derivation** from usage patterns (5-hour windows)
 - **Multi-path support** for different Claude Code installation locations
+- **Enhanced analytics** with cache metrics and efficiency tracking
 
 ## Mock Mode
 
@@ -382,7 +482,12 @@ For development and testing when no Claude Code data is available:
 claude-token-monitor --force-mock
 ```
 
-This generates realistic simulated usage data for development purposes. The application no longer automatically falls back to mock mode - it must be explicitly enabled.
+This generates realistic simulated usage data for development purposes, including:
+- **Mock cache metrics** with randomized hit rates and creation patterns
+- **Realistic token consumption** patterns for testing analytics
+- **Time-series data** for chart visualization testing
+
+The application no longer automatically falls back to mock mode - it must be explicitly enabled.
 
 ## Contributing
 
@@ -399,17 +504,26 @@ MIT License - see LICENSE file for details.
 
 ## Changelog
 
-### v0.2.4 (Current)
+### v0.2.6 (Current)
+- 🎯 **Dual Overview Modes** - Toggle between General and Detailed views with 'V' key
+- 📊 **Advanced Analytics Dashboard** - Cache metrics, real-time dashboards, 4-panel layout
+- 📈 **Enhanced Time-Series Charts** - Stacked datasets with multiple token types
+- 🔍 **Cache Metrics Tracking** - Hit rate, creation rate, and efficiency analytics
+- 📝 **Verbose Logging Mode** - Debug logging to file with --verbose flag
+- 🔧 **Comprehensive Debugging** - Key event tracking, tab switching diagnostics
+- ⚡ **Performance Optimizations** - Data sampling for large datasets, responsive UI
+- 🎨 **UI Enhancements** - Alternative navigation keys, improved error handling
+- 🛡️ **Enhanced Security** - Improved input validation and path canonicalization
+
+### v0.2.5
 - 📁 **File-based monitoring architecture** - Complete rewrite for passive observation
 - 🔍 **JSONL file parsing** - Reads Claude Code's usage files directly
 - 🛡️ **Security hardening** - Comprehensive input validation and memory safety
 - 📊 **7-tab Ratatui interface** - Overview, Charts, Session, Details, Security, Settings, About
 - ⚡ **Real-time file watching** - Automatic updates when Claude Code writes new data
 - 🔒 **Privacy-focused design** - No network access, all processing local
-- 📋 **Session observation** - Derives sessions from usage patterns rather than API calls
-- 🎯 **Accurate calculations** - Usage rates, efficiency scores, and depletion predictions
 
-### v0.2.3
+### v0.2.3-0.2.4
 - 🔧 Removed automatic fallback to mock mode (now requires --force-mock)
 - 📋 Enhanced Settings tab with comprehensive technical documentation
 - 📊 Added detailed system flow diagrams and architecture documentation
@@ -442,7 +556,7 @@ MIT License - see LICENSE file for details.
 ---
 
 **Author:** Chris Phillips <tools-claude-token-monitor@adiuco.com>  
-**Version:** 0.2.4  
+**Version:** 0.2.6  
 **License:** MIT  
 **Repository:** https://github.com/teamktown/claude-token-monitor
 
