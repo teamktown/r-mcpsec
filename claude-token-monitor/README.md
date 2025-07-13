@@ -25,6 +25,16 @@
 
 This tool monitors your Claude AI token usage by **passively reading local files** that Claude Code writes during your conversations. It requires **no API calls, authentication, or network access** - everything happens locally by observing the usage data Claude Code already creates.
 
+#### Observations by the author:
+This is a work in progress that aspires to offer insight into at least what the token burn rate is however there are many factors to consider given all the optimizations and caching going on - in other words, YMMV!
+
+Things at play:
+- Estimating token usage appears to be complex. 
+- Caching, tokens sent, tokens received, concurrent sessions,  time of day behaviours by Claude that may be lienent OR more strict when load is high are all factors
+- What this tool does is report on it's observations and gives an estimation of usage and glimpse into the Claude project JSONL files it has.
+- the 'plan' is an inferrence/hint given all the above
+
+
 ### What Files It Monitors
 
 - `~/.claude/projects/**/*.jsonl` (primary location)
@@ -57,6 +67,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
 2. Clone and build:
+- This branch is v0.2.6-maintenance however intention is to merge it down to main post release. Use the binary install is recommended.
+Main branch:
 ```bash
 git clone https://github.com/teamktown/claude-token-monitor
 cd claude-token-monitor
@@ -153,6 +165,8 @@ claude-token-monitor --help
 - **max20**: 100,000 tokens per 5-hour session
 - **custom**: Specify custom token limit (e.g., `--plan 50000`)
 
+**Note:** Plan types specified via CLI are **hints for calculations** when no usage data is available. The tool automatically detects your actual plan type from observed usage patterns and will override CLI hints when sufficient data exists. Plan type switches are detected by analyzing token consumption patterns over time.
+
 ## Enhanced Ratatui Interface
 
 The enhanced interface provides 7 interactive tabs with comprehensive monitoring:
@@ -229,6 +243,8 @@ The enhanced interface provides 7 interactive tabs with comprehensive monitoring
 - **Input/Output Ratio**: Analysis of conversation efficiency
 - **Session Progress**: Advanced progress tracking with predictive analytics
 - **Efficiency Scoring**: Comprehensive efficiency metrics based on usage patterns
+- **Plan Type Detection**: Automatic detection of Claude plan types from usage patterns
+- **Plan Change Tracking**: Detection of plan upgrades/downgrades based on consumption shifts
 
 ### Time-Series Visualization
 - **Stacked Charts**: Multiple token type datasets overlaid on time progression
@@ -252,6 +268,8 @@ When `--verbose` is enabled:
 - **File monitoring operations** logged with timestamps
 - **Cache metrics calculations** with detailed analytics
 - **Session derivation logic** tracking
+- **Plan type detection** with usage pattern analysis
+- **Plan change detection** with timestamp logging
 
 ### Debug Features
 - **Comprehensive key event logging** with code, modifiers, and current tab state
