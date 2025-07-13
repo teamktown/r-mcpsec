@@ -53,6 +53,26 @@ impl TokenUsage {
             + self.cache_creation_input_tokens.unwrap_or(0)
             + self.cache_read_input_tokens.unwrap_or(0)
     }
+    
+    /// Calculate cache hit rate (cache read tokens / total input tokens)
+    pub fn cache_hit_rate(&self) -> f64 {
+        let total_input = self.input_tokens + self.cache_creation_input_tokens.unwrap_or(0);
+        if total_input == 0 {
+            0.0
+        } else {
+            self.cache_read_input_tokens.unwrap_or(0) as f64 / total_input as f64
+        }
+    }
+    
+    /// Get cache creation tokens
+    pub fn cache_creation_tokens(&self) -> u32 {
+        self.cache_creation_input_tokens.unwrap_or(0)
+    }
+    
+    /// Get cache read tokens  
+    pub fn cache_read_tokens(&self) -> u32 {
+        self.cache_read_input_tokens.unwrap_or(0)
+    }
 }
 
 /// File-based Claude token monitor that reads JSONL files
@@ -64,13 +84,126 @@ pub struct FileBasedTokenMonitor {
 }
 
 impl FileBasedTokenMonitor {
+    /// Detect plan type based on usage patterns, peak consumption, and session behavior
+    fn detect_plan_type_from_usage(&self, total_tokens: u32, session_start: DateTime<Utc>, now: DateTime<Utc>) -> PlanType {
+        use log::debug;
+        
+        // Get session entries for analysis
+        let session_entries: Vec<_> = self.usage_entries
+            .iter()
+            .filter(|entry| entry.timestamp >= session_start && entry.timestamp <= now)
+            .collect();
+            
+        if session_entries.is_empty() {
+            debug!("No entries in session, defaulting to Max5");
+            return PlanType::Max5;
+        }
+        
+        // Analyze usage patterns
+        let avg_tokens_per_request = total_tokens as f64 / session_entries.len() as f64;
+        let max_single_request = session_entries
+            .iter()
+            .map(|entry| entry.usage.total_tokens())
+            .max()
+            .unwrap_or(0);
+        
+        // Calculate session duration in hours  
+        let session_duration_hours = (now - session_start).num_hours() as f64;
+        let tokens_per_hour = if session_duration_hours > 0.0 {
+            total_tokens as f64 / session_duration_hours
+        } else {
+            total_tokens as f64
+        };
+        
+        debug!("Plan detection - Total: {}, Avg/req: {:.1}, Max/req: {}, Rate: {:.1}/hr, Entries: {}", 
+               total_tokens, avg_tokens_per_request, max_single_request, tokens_per_hour, session_entries.len());
+        
+        // Enhanced plan type detection logic
+        let detected_plan = if total_tokens > 80_000 || max_single_request > 15_000 {
+            // Very high usage suggests Max20 plan
+            PlanType::Max20
+        } else if total_tokens > 30_000 || max_single_request > 8_000 || tokens_per_hour > 8_000.0 {
+            // High usage or large individual requests suggest Pro plan
+            PlanType::Pro  
+        } else if total_tokens > 15_000 || avg_tokens_per_request > 1_000.0 || session_entries.len() > 30 {
+            // Moderate sustained usage suggests Pro plan
+            PlanType::Pro
+        } else {
+            // Low usage suggests Max5 plan
+            PlanType::Max5
+        };
+        
+        debug!("Detected plan type: {:?}", detected_plan);
+        detected_plan
+    }
+    
+    /// Detect potential plan type changes by analyzing usage pattern shifts over time
+    pub fn detect_plan_changes(&self) -> Vec<(DateTime<Utc>, PlanType, PlanType)> {
+        use chrono::Duration;
+        use log::debug;
+        
+        let mut plan_changes = Vec::new();
+        
+        if self.usage_entries.len() < 10 {
+            return plan_changes;
+        }
+        
+        // Analyze usage in 1-hour windows to detect plan changes
+        let start_time = self.usage_entries.first().unwrap().timestamp;
+        let end_time = self.usage_entries.last().unwrap().timestamp;
+        let total_duration = end_time - start_time;
+        
+        if total_duration < Duration::hours(2) {
+            return plan_changes;
+        }
+        
+        let window_size = Duration::hours(1);
+        let mut current_time = start_time;
+        let mut last_detected_plan: Option<PlanType> = None;
+        
+        debug!("Analyzing {} hours of usage data for plan changes", total_duration.num_hours());
+        
+        while current_time < end_time {
+            let window_end = current_time + window_size;
+            
+            // Get entries in this time window
+            let window_entries: Vec<_> = self.usage_entries
+                .iter()
+                .filter(|entry| entry.timestamp >= current_time && entry.timestamp < window_end)
+                .collect();
+                
+            if window_entries.len() >= 3 {  // Need enough data points
+                let window_tokens: u32 = window_entries
+                    .iter()
+                    .map(|entry| entry.usage.total_tokens())
+                    .sum();
+                    
+                let detected_plan = self.detect_plan_type_from_usage(window_tokens, current_time, window_end);
+                
+                if let Some(ref last_plan) = last_detected_plan {
+                    if std::mem::discriminant(last_plan) != std::mem::discriminant(&detected_plan) {
+                        debug!("Plan change detected at {}: {:?} -> {:?} (usage: {} tokens)", 
+                               current_time, last_plan, detected_plan, window_tokens);
+                        plan_changes.push((current_time, last_plan.clone(), detected_plan.clone()));
+                    }
+                }
+                
+                last_detected_plan = Some(detected_plan);
+            }
+            
+            current_time = current_time + window_size;
+        }
+        
+        debug!("Found {} potential plan changes", plan_changes.len());
+        plan_changes
+    }
     pub fn new() -> Result<Self> {
         let claude_data_paths = Self::discover_claude_paths()?;
         
         if claude_data_paths.is_empty() {
             log::warn!("No Claude data directories found. Token monitoring may not work correctly.");
         } else {
-            log::info!("Found Claude data paths: {:?}", claude_data_paths);
+            log::info!("Found Claude data paths: {claude_data_paths:?}");
         }
 
         Ok(Self {
@@ -99,7 +232,7 @@ impl FileBasedTokenMonitor {
                 if let Ok(validated_path) = Self::validate_and_canonicalize_path(path_str) {
                     paths.push(validated_path);
                 } else {
-                    log::warn!("Invalid path in CLAUDE_DATA_PATHS: {}", path_str);
+                    log::warn!("Invalid path in CLAUDE_DATA_PATHS: {path_str}");
                 }
             }
         }
@@ -108,7 +241,7 @@ impl FileBasedTokenMonitor {
             if let Ok(validated_path) = Self::validate_and_canonicalize_path(&env_path) {
                 paths.push(validated_path);
             } else {
-                log::warn!("Invalid path in CLAUDE_DATA_PATH: {}", env_path);
+                log::warn!("Invalid path in CLAUDE_DATA_PATH: {env_path}");
             }
         }
         
@@ -162,11 +295,9 @@ impl FileBasedTokenMonitor {
         if let Some(home_dir) = dirs::home_dir() {
             if !canonical_path.starts_with(&home_dir) {
                 // Allow system directories that are commonly used for Claude data
-                let allowed_system_paths = vec![
-                    "/opt/claude",
+                let allowed_system_paths = ["/opt/claude",
                     "/usr/local/share/claude",
-                    "/var/lib/claude",
-                ];
+                    "/var/lib/claude"];
                 
                 let is_allowed = allowed_system_paths.iter()
                     .any(|allowed| canonical_path.starts_with(allowed));
@@ -185,24 +316,24 @@ impl FileBasedTokenMonitor {
         let mut all_entries = Vec::new();
         
         for data_path in &self.claude_data_paths {
-            log::debug!("Scanning directory: {:?}", data_path);
+            log::debug!("Scanning directory: {data_path:?}");
             
             // Find all .jsonl files recursively
             for entry in WalkDir::new(data_path)
                 .into_iter()
                 .filter_map(|e| e.ok())
                 .filter(|e| e.file_type().is_file())
-                .filter(|e| e.path().extension().map_or(false, |ext| ext == "jsonl"))
+                .filter(|e| e.path().extension().is_some_and(|ext| ext == "jsonl"))
             {
                 let file_path = entry.path();
-                log::debug!("Parsing JSONL file: {:?}", file_path);
+                log::debug!("Parsing JSONL file: {file_path:?}");
                 
                 match self.parse_jsonl_file(file_path).await {
                     Ok(mut entries) => {
                         all_entries.append(&mut entries);
                     }
                     Err(e) => {
-                        log::warn!("Failed to parse JSONL file {:?}: {}", file_path, e);
+                        log::warn!("Failed to parse JSONL file {file_path:?}: {e}");
                     }
                 }
             }
@@ -414,14 +545,8 @@ impl FileBasedTokenMonitor {
             .map(|entry| entry.usage.total_tokens())
             .sum();
         
-        // Determine plan type based on usage patterns (best guess from observed data)
-        let plan_type = if total_tokens_used > 20_000 {
-            PlanType::Max20
-        } else if total_tokens_used > 10_000 || self.usage_entries.len() > 20 {
-            PlanType::Pro
-        } else {
-            PlanType::Max5
-        };
+        // Determine plan type based on usage patterns and session behavior
+        let plan_type = self.detect_plan_type_from_usage(total_tokens_used, session_start, now);
         
         // Generate a session ID based on the session start time (deterministic)
         let session_id = format!("observed-{}", session_start.timestamp());
@@ -440,7 +565,24 @@ impl FileBasedTokenMonitor {
     
     /// Calculate current usage metrics from observed data (passive monitoring)
     pub fn calculate_metrics(&self) -> Option<UsageMetrics> {
-        let current_session = self.derive_current_session()?;
+        let mut current_session = self.derive_current_session()?;
+        
+        // Detect and report plan changes
+        let plan_changes = self.detect_plan_changes();
+        if !plan_changes.is_empty() {
+            use log::info;
+            info!("🔄 Detected {} potential plan changes in usage history:", plan_changes.len());
+            for (timestamp, old_plan, new_plan) in &plan_changes {
+                info!("  {} - {:?} → {:?}", timestamp.format("%Y-%m-%d %H:%M UTC"), old_plan, new_plan);
+            }
+            
+            // Use the most recent plan change if available
+            if let Some((_, _, latest_plan)) = plan_changes.last() {
+                current_session.plan_type = latest_plan.clone();
+                current_session.tokens_limit = latest_plan.default_limit();
+                info!("📊 Updated current session to use detected plan: {:?}", latest_plan);
+            }
+        }
         let now = Utc::now();
         let session_start = current_session.start_time;
         let one_hour_ago = now - chrono::Duration::hours(1);
@@ -506,13 +648,25 @@ impl FileBasedTokenMonitor {
         let mut updated_session = current_session;
         updated_session.tokens_used = total_tokens_used;
         
+        // Generate time-series data points from session entries
+        let usage_history = self.generate_time_series_data(&session_entries, &session_start);
+        
+        // Calculate enhanced analytics
+        let (cache_hit_rate, cache_creation_rate, input_output_ratio) = self.calculate_enhanced_analytics(&session_entries, &recent_entries, session_duration_minutes);
+        
         Some(UsageMetrics {
             current_session: updated_session,
             usage_rate,
             session_progress,
             efficiency_score,
             projected_depletion,
-            usage_history: Vec::new(), // Will be populated in future iterations
+            usage_history,
+            
+            // Enhanced analytics
+            cache_hit_rate,
+            cache_creation_rate,
+            token_consumption_rate: usage_rate,
+            input_output_ratio,
         })
     }
 
@@ -533,6 +687,104 @@ impl FileBasedTokenMonitor {
         }
     }
 
+    /// Generate time-series data points for chart display
+    fn generate_time_series_data(&self, session_entries: &[&UsageEntry], session_start: &DateTime<Utc>) -> Vec<TokenUsagePoint> {
+        if session_entries.is_empty() {
+            return Vec::new();
+        }
+        
+        let mut time_series = Vec::new();
+        let mut cumulative_tokens = 0u32;
+        
+        // Sort entries by timestamp to ensure proper ordering
+        let mut sorted_entries = session_entries.to_vec();
+        sorted_entries.sort_by_key(|entry| entry.timestamp);
+        
+        // Add starting point at session start with 0 tokens
+        time_series.push(TokenUsagePoint {
+            timestamp: *session_start,
+            tokens_used: 0,
+            session_id: "current".to_string(),
+        });
+        
+        // Process each usage entry to create cumulative data points
+        for entry in sorted_entries {
+            cumulative_tokens += entry.usage.total_tokens();
+            time_series.push(TokenUsagePoint {
+                timestamp: entry.timestamp,
+                tokens_used: cumulative_tokens,
+                session_id: "current".to_string(),
+            });
+        }
+        
+        // If we have multiple points, ensure reasonable spacing for visualization
+        if time_series.len() > 100 {
+            // Sample down to ~50 points for better performance
+            let step = time_series.len() / 50;
+            time_series = time_series
+                .into_iter()
+                .enumerate()
+                .filter(|(i, _)| i % step == 0)
+                .map(|(_, point)| point)
+                .collect();
+            
+            // Always include the last point
+            if let Some(last) = session_entries.last() {
+                time_series.push(TokenUsagePoint {
+                    timestamp: last.timestamp,
+                    tokens_used: cumulative_tokens,
+                    session_id: "current".to_string(),
+                });
+            }
+        }
+        
+        time_series
+    }
+    
+    /// Calculate enhanced analytics for cache metrics and token ratios
+    fn calculate_enhanced_analytics(&self, session_entries: &[&UsageEntry], _recent_entries: &[&UsageEntry], session_duration_minutes: f64) -> (f64, f64, f64) {
+        if session_entries.is_empty() {
+            return (0.0, 0.0, 0.0);
+        }
+        
+        // Calculate cache hit rate across all session entries
+        let mut total_input_tokens = 0u32;
+        let mut total_cache_read_tokens = 0u32;
+        let mut total_cache_creation_tokens = 0u32;
+        let mut total_output_tokens = 0u32;
+        
+        for entry in session_entries {
+            total_input_tokens += entry.usage.input_tokens;
+            total_cache_read_tokens += entry.usage.cache_read_tokens();
+            total_cache_creation_tokens += entry.usage.cache_creation_tokens();
+            total_output_tokens += entry.usage.output_tokens;
+        }
+        
+        // Cache hit rate: cache read tokens / (input tokens + cache creation tokens)
+        let total_effective_input = total_input_tokens + total_cache_creation_tokens;
+        let cache_hit_rate = if total_effective_input > 0 {
+            total_cache_read_tokens as f64 / total_effective_input as f64
+        } else {
+            0.0
+        };
+        
+        // Cache creation rate: cache creation tokens per minute
+        let cache_creation_rate = if session_duration_minutes > 0.0 {
+            total_cache_creation_tokens as f64 / session_duration_minutes
+        } else {
+            0.0
+        };
+        
+        // Input/Output ratio: total input tokens / total output tokens
+        let input_output_ratio = if total_output_tokens > 0 {
+            (total_input_tokens + total_cache_creation_tokens) as f64 / total_output_tokens as f64
+        } else {
+            0.0
+        };
+        
+        (cache_hit_rate, cache_creation_rate, input_output_ratio)
+    }
+    
     /// Get file sources analysis with token counts
     pub fn get_file_sources_analysis(&self) -> Vec<(String, usize, u32)> {
         // Group entries by file path (approximated from data patterns)
@@ -557,7 +809,7 @@ impl FileBasedTokenMonitor {
                 if time_diff > chrono::Duration::hours(1) {
                     if current_group_entries > 0 {
                         file_analysis.push((
-                            format!("session-{}.jsonl", group_index),
+                            format!("session-{group_index}.jsonl"),
                             current_group_entries,
                             current_group_tokens
                         ));
@@ -575,7 +827,7 @@ impl FileBasedTokenMonitor {
             // Add the final group
             if current_group_entries > 0 {
                 file_analysis.push((
-                    format!("session-{}.jsonl", group_index),
+                    format!("session-{group_index}.jsonl"),
                     current_group_entries,
                     current_group_tokens
                 ));
@@ -649,7 +901,7 @@ impl FileBasedTokenMonitor {
         // Watch all Claude data directories
         for path in &self.claude_data_paths {
             watcher.watch(path, RecursiveMode::Recursive)?;
-            log::info!("Watching directory for changes: {:?}", path);
+            log::info!("Watching directory for changes: {path:?}");
         }
         
         // Store watcher in the struct to manage its lifetime properly

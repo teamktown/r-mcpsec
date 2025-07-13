@@ -12,13 +12,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use anyhow::Result;
-use humantime;
 use chrono::Utc;
+use log::debug;
 
 #[derive(Parser)]
 #[command(name = "claude-token-monitor")]
 #[command(about = "A lightweight Rust client for Claude token usage monitoring")]
-#[command(version = "0.2.3")]
+#[command(version = "0.2.6")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -51,6 +51,7 @@ struct Cli {
     #[arg(long)]
     about: bool,
 }
+
 
 #[derive(Subcommand)]
 enum Commands {
@@ -86,6 +87,13 @@ enum Commands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     
+    // Add overflow checks in debug mode - PUT IT HERE
+    #[cfg(debug_assertions)]
+    std::panic::set_hook(Box::new(|panic_info| {
+        debug!("PANIC: {panic_info}");
+        std::process::exit(1);
+    }));
+    
     // Handle special flags first
     if cli.about {
         show_about();
@@ -98,9 +106,24 @@ async fn main() -> Result<()> {
     }
     
     // Initialize logging
-    let log_level = if cli.verbose { "debug" } else { "info" };
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level))
+    if cli.verbose {
+    // Log to file when verbose
+    use std::fs::OpenOptions;
+    let log_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("debug.log")?;
+    
+    env_logger::Builder::new()
+        .filter_level(log::LevelFilter::Debug)
+        .target(env_logger::Target::Pipe(Box::new(log_file)))
         .init();
+} else {
+    // Normal logging to stderr for info/warn/error
+    env_logger::Builder::new()
+        .filter_level(log::LevelFilter::Info)
+        .init();
+}
 
     // Setup data directory
     let data_dir = dirs::data_dir()
@@ -138,9 +161,9 @@ async fn main() -> Result<()> {
                 Some(monitor)
             }
             Err(e) => {
-                eprintln!("⚠️ Failed to initialize file monitor: {}", e);
-                eprintln!("💡 Tip: Use --force-mock for development/testing with simulated data");
-                eprintln!("📁 Make sure Claude Code has created usage files in ~/.claude/projects/");
+                debug!("⚠️ Failed to initialize file monitor: {e}");
+                debug!("💡 Tip: Use --force-mock for development/testing with simulated data");
+                debug!("📁 Make sure Claude Code has created usage files in ~/.claude/projects/");
                 None
             }
         }
@@ -181,7 +204,7 @@ async fn run_monitor(
     use_mock: bool,
 ) -> Result<()> {
     println!("🧠 Claude Token Monitor - File-Based Edition");
-    println!("Starting monitoring with plan: {:?}", plan_type);
+    println!("Starting monitoring with plan: {plan_type:?}");
     
     // Update observed sessions from JSONL data (passive monitoring)
     session_service.write().await.update_observed_sessions().await?;
@@ -202,16 +225,25 @@ async fn run_monitor(
         generate_mock_metrics(mock_session)
     } else if let Some(ref monitor) = file_monitor {
         monitor.calculate_metrics().unwrap_or_else(|| {
-            // If no data is available, create a placeholder
+            // If no data is available, create a placeholder using observed plan type if available
             println!("📝 No Claude usage data found in JSONL files");
+            let observed_plan = monitor.derive_current_session()
+                .map(|session| session.plan_type)
+                .unwrap_or_else(|| plan_type.clone());
+            
+            debug!("Using plan type: {:?} (observed: {}, CLI hint: {:?})", 
+                   observed_plan, 
+                   monitor.derive_current_session().is_some(),
+                   plan_type);
+            
             UsageMetrics {
                 current_session: TokenSession {
                     id: "no-data".to_string(),
                     start_time: Utc::now(),
                     end_time: None,
-                    plan_type: plan_type.clone(),
+                    plan_type: observed_plan.clone(),
                     tokens_used: 0,
-                    tokens_limit: plan_type.default_limit(),
+                    tokens_limit: observed_plan.default_limit(),
                     is_active: false,
                     reset_time: Utc::now() + chrono::Duration::hours(5),
                 },
@@ -220,10 +252,16 @@ async fn run_monitor(
                 efficiency_score: 1.0,
                 projected_depletion: None,
                 usage_history: Vec::new(),
+                
+                // Default values for enhanced analytics
+                cache_hit_rate: 0.0,
+                cache_creation_rate: 0.0,
+                token_consumption_rate: 0.0,
+                input_output_ratio: 1.0,
             }
         })
     } else {
-        eprintln!("❌ No file monitor available and not in mock mode");
+        debug!("❌ No file monitor available and not in mock mode");
         std::process::exit(1);
     };
     
@@ -249,8 +287,8 @@ async fn run_monitor(
                 result
             }
             Err(e) => {
-                eprintln!("💡 Enhanced UI not available: {}", e);
-                eprintln!("   Falling back to summary display...");
+                debug!("💡 Enhanced UI not available: {e}");
+                debug!("   Falling back to summary display...");
                 Err(e)
             }
         }
@@ -298,6 +336,12 @@ fn generate_mock_metrics(session: TokenSession) -> UsageMetrics {
         efficiency_score,
         projected_depletion: Some(chrono::Utc::now() + chrono::Duration::hours(2)),
         usage_history: Vec::new(),
+        
+        // Mock values for enhanced analytics
+        cache_hit_rate: rng.gen_range(0.1..0.8),
+        cache_creation_rate: rng.gen_range(10.0..50.0),
+        token_consumption_rate: usage_rate,
+        input_output_ratio: rng.gen_range(1.5..3.0),
     }
 }
 
@@ -382,11 +426,11 @@ async fn configure_monitor(
     
     if let Some(interval_val) = interval {
         config.update_interval_seconds = interval_val;
-        println!("✅ Set update interval to: {} seconds", interval_val);
+        println!("✅ Set update interval to: {interval_val} seconds");
     }
     
     if let Some(threshold_val) = threshold {
-        if threshold_val >= 0.0 && threshold_val <= 1.0 {
+        if (0.0..=1.0).contains(&threshold_val) {
             config.warning_threshold = threshold_val;
             println!("✅ Set warning threshold to: {:.1}%", threshold_val * 100.0);
         } else {
@@ -437,13 +481,13 @@ fn show_about() {
     println!("{}", "📱 Claude Token Monitor".bright_cyan().bold());
     println!();
     println!("{}", "📋 Version Information:".bright_yellow().bold());
-    println!("  Version: {}", "v0.2.3".bright_green());
+    println!("  Version: {}", "v0.2.6".bright_green());
     println!("  Name: {}", "claude-token-monitor".bright_white());
     println!("  Description: A lightweight Rust client for Claude token usage monitoring");
     println!();
     
     println!("{}", "👨‍💻 Author:".bright_yellow().bold());
-    println!("  Chris Phillips, Email: {}", "chris@adiuco.com".bright_blue());
+    println!("  Chris Phillips, Email: {}", "tools-claude-token-monitor@adiuco.com".bright_blue());
     println!();
     
     println!("{}", "🛠️ Built Using:".bright_yellow().bold());

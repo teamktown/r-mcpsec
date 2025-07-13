@@ -64,6 +64,12 @@ pub struct UsageMetrics {
     pub efficiency_score: f64,
     pub session_progress: f64, // percentage of session time elapsed
     pub usage_history: Vec<TokenUsagePoint>,
+    
+    // Enhanced analytics
+    pub cache_hit_rate: f64, // cache read tokens / total input tokens  
+    pub cache_creation_rate: f64, // cache creation tokens per minute
+    pub token_consumption_rate: f64, // tokens per minute
+    pub input_output_ratio: f64, // input tokens / output tokens
 }
 
 /// Point-in-time token usage data
