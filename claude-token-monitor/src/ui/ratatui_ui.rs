@@ -13,7 +13,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Axis, BarChart, Block, Borders, Cell, Chart, Dataset, GraphType, Gauge, List, ListItem, Paragraph, Row, Table, Tabs,
+        Axis, BarChart, Block, Borders, Chart, Dataset, GraphType, List, ListItem, Paragraph, Tabs,
         Wrap,
     },
     Frame, Terminal,
