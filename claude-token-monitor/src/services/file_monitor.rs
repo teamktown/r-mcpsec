@@ -84,6 +84,119 @@ pub struct FileBasedTokenMonitor {
 }
 
 impl FileBasedTokenMonitor {
+    /// Detect plan type based on usage patterns, peak consumption, and session behavior
+    fn detect_plan_type_from_usage(&self, total_tokens: u32, session_start: DateTime<Utc>, now: DateTime<Utc>) -> PlanType {
+        use log::debug;
+        
+        // Get session entries for analysis
+        let session_entries: Vec<_> = self.usage_entries
+            .iter()
+            .filter(|entry| entry.timestamp >= session_start && entry.timestamp <= now)
+            .collect();
+            
+        if session_entries.is_empty() {
+            debug!("No entries in session, defaulting to Max5");
+            return PlanType::Max5;
+        }
+        
+        // Analyze usage patterns
+        let avg_tokens_per_request = total_tokens as f64 / session_entries.len() as f64;
+        let max_single_request = session_entries
+            .iter()
+            .map(|entry| entry.usage.total_tokens())
+            .max()
+            .unwrap_or(0);
+        
+        // Calculate session duration in hours  
+        let session_duration_hours = (now - session_start).num_hours() as f64;
+        let tokens_per_hour = if session_duration_hours > 0.0 {
+            total_tokens as f64 / session_duration_hours
+        } else {
+            total_tokens as f64
+        };
+        
+        debug!("Plan detection - Total: {}, Avg/req: {:.1}, Max/req: {}, Rate: {:.1}/hr, Entries: {}", 
+               total_tokens, avg_tokens_per_request, max_single_request, tokens_per_hour, session_entries.len());
+        
+        // Enhanced plan type detection logic
+        let detected_plan = if total_tokens > 80_000 || max_single_request > 15_000 {
+            // Very high usage suggests Max20 plan
+            PlanType::Max20
+        } else if total_tokens > 30_000 || max_single_request > 8_000 || tokens_per_hour > 8_000.0 {
+            // High usage or large individual requests suggest Pro plan
+            PlanType::Pro  
+        } else if total_tokens > 15_000 || avg_tokens_per_request > 1_000.0 || session_entries.len() > 30 {
+            // Moderate sustained usage suggests Pro plan
+            PlanType::Pro
+        } else {
+            // Low usage suggests Max5 plan
+            PlanType::Max5
+        };
+        
+        debug!("Detected plan type: {:?}", detected_plan);
+        detected_plan
+    }
+    
+    /// Detect potential plan type changes by analyzing usage pattern shifts over time
+    pub fn detect_plan_changes(&self) -> Vec<(DateTime<Utc>, PlanType, PlanType)> {
+        use chrono::Duration;
+        use log::debug;
+        
+        let mut plan_changes = Vec::new();
+        
+        if self.usage_entries.len() < 10 {
+            return plan_changes;
+        }
+        
+        // Analyze usage in 1-hour windows to detect plan changes
+        let start_time = self.usage_entries.first().unwrap().timestamp;
+        let end_time = self.usage_entries.last().unwrap().timestamp;
+        let total_duration = end_time - start_time;
+        
+        if total_duration < Duration::hours(2) {
+            return plan_changes;
+        }
+        
+        let window_size = Duration::hours(1);
+        let mut current_time = start_time;
+        let mut last_detected_plan: Option<PlanType> = None;
+        
+        debug!("Analyzing {} hours of usage data for plan changes", total_duration.num_hours());
+        
+        while current_time < end_time {
+            let window_end = current_time + window_size;
+            
+            // Get entries in this time window
+            let window_entries: Vec<_> = self.usage_entries
+                .iter()
+                .filter(|entry| entry.timestamp >= current_time && entry.timestamp < window_end)
+                .collect();
+                
+            if window_entries.len() >= 3 {  // Need enough data points
+                let window_tokens: u32 = window_entries
+                    .iter()
+                    .map(|entry| entry.usage.total_tokens())
+                    .sum();
+                    
+                let detected_plan = self.detect_plan_type_from_usage(window_tokens, current_time, window_end);
+                
+                if let Some(ref last_plan) = last_detected_plan {
+                    if std::mem::discriminant(last_plan) != std::mem::discriminant(&detected_plan) {
+                        debug!("Plan change detected at {}: {:?} -> {:?} (usage: {} tokens)", 
+                               current_time, last_plan, detected_plan, window_tokens);
+                        plan_changes.push((current_time, last_plan.clone(), detected_plan.clone()));
+                    }
+                }
+                
+                last_detected_plan = Some(detected_plan);
+            }
+            
+            current_time = current_time + window_size;
+        }
+        
+        debug!("Found {} potential plan changes", plan_changes.len());
+        plan_changes
+    }
     pub fn new() -> Result<Self> {
         let claude_data_paths = Self::discover_claude_paths()?;
         
@@ -432,14 +545,8 @@ impl FileBasedTokenMonitor {
             .map(|entry| entry.usage.total_tokens())
             .sum();
         
-        // Determine plan type based on usage patterns (best guess from observed data)
-        let plan_type = if total_tokens_used > 20_000 {
-            PlanType::Max20
-        } else if total_tokens_used > 10_000 || self.usage_entries.len() > 20 {
-            PlanType::Pro
-        } else {
-            PlanType::Max5
-        };
+        // Determine plan type based on usage patterns and session behavior
+        let plan_type = self.detect_plan_type_from_usage(total_tokens_used, session_start, now);
         
         // Generate a session ID based on the session start time (deterministic)
         let session_id = format!("observed-{}", session_start.timestamp());
@@ -458,7 +565,24 @@ impl FileBasedTokenMonitor {
     
     /// Calculate current usage metrics from observed data (passive monitoring)
     pub fn calculate_metrics(&self) -> Option<UsageMetrics> {
-        let current_session = self.derive_current_session()?;
+        let mut current_session = self.derive_current_session()?;
+        
+        // Detect and report plan changes
+        let plan_changes = self.detect_plan_changes();
+        if !plan_changes.is_empty() {
+            use log::info;
+            info!("🔄 Detected {} potential plan changes in usage history:", plan_changes.len());
+            for (timestamp, old_plan, new_plan) in &plan_changes {
+                info!("  {} - {:?} → {:?}", timestamp.format("%Y-%m-%d %H:%M UTC"), old_plan, new_plan);
+            }
+            
+            // Use the most recent plan change if available
+            if let Some((_, _, latest_plan)) = plan_changes.last() {
+                current_session.plan_type = latest_plan.clone();
+                current_session.tokens_limit = latest_plan.default_limit();
+                info!("📊 Updated current session to use detected plan: {:?}", latest_plan);
+            }
+        }
         let now = Utc::now();
         let session_start = current_session.start_time;
         let one_hour_ago = now - chrono::Duration::hours(1);

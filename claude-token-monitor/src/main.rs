@@ -225,16 +225,25 @@ async fn run_monitor(
         generate_mock_metrics(mock_session)
     } else if let Some(ref monitor) = file_monitor {
         monitor.calculate_metrics().unwrap_or_else(|| {
-            // If no data is available, create a placeholder
+            // If no data is available, create a placeholder using observed plan type if available
             println!("📝 No Claude usage data found in JSONL files");
+            let observed_plan = monitor.derive_current_session()
+                .map(|session| session.plan_type)
+                .unwrap_or_else(|| plan_type.clone());
+            
+            debug!("Using plan type: {:?} (observed: {}, CLI hint: {:?})", 
+                   observed_plan, 
+                   monitor.derive_current_session().is_some(),
+                   plan_type);
+            
             UsageMetrics {
                 current_session: TokenSession {
                     id: "no-data".to_string(),
                     start_time: Utc::now(),
                     end_time: None,
-                    plan_type: plan_type.clone(),
+                    plan_type: observed_plan.clone(),
                     tokens_used: 0,
-                    tokens_limit: plan_type.default_limit(),
+                    tokens_limit: observed_plan.default_limit(),
                     is_active: false,
                     reset_time: Utc::now() + chrono::Duration::hours(5),
                 },
