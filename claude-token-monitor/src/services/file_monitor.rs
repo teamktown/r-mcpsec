@@ -53,6 +53,26 @@ impl TokenUsage {
             + self.cache_creation_input_tokens.unwrap_or(0)
             + self.cache_read_input_tokens.unwrap_or(0)
     }
+    
+    /// Calculate cache hit rate (cache read tokens / total input tokens)
+    pub fn cache_hit_rate(&self) -> f64 {
+        let total_input = self.input_tokens + self.cache_creation_input_tokens.unwrap_or(0);
+        if total_input == 0 {
+            0.0
+        } else {
+            self.cache_read_input_tokens.unwrap_or(0) as f64 / total_input as f64
+        }
+    }
+    
+    /// Get cache creation tokens
+    pub fn cache_creation_tokens(&self) -> u32 {
+        self.cache_creation_input_tokens.unwrap_or(0)
+    }
+    
+    /// Get cache read tokens  
+    pub fn cache_read_tokens(&self) -> u32 {
+        self.cache_read_input_tokens.unwrap_or(0)
+    }
 }
 
 /// File-based Claude token monitor that reads JSONL files
@@ -509,6 +529,9 @@ impl FileBasedTokenMonitor {
         // Generate time-series data points from session entries
         let usage_history = self.generate_time_series_data(&session_entries, &session_start);
         
+        // Calculate enhanced analytics
+        let (cache_hit_rate, cache_creation_rate, input_output_ratio) = self.calculate_enhanced_analytics(&session_entries, &recent_entries, session_duration_minutes);
+        
         Some(UsageMetrics {
             current_session: updated_session,
             usage_rate,
@@ -516,6 +539,12 @@ impl FileBasedTokenMonitor {
             efficiency_score,
             projected_depletion,
             usage_history,
+            
+            // Enhanced analytics
+            cache_hit_rate,
+            cache_creation_rate,
+            token_consumption_rate: usage_rate,
+            input_output_ratio,
         })
     }
 
@@ -588,6 +617,50 @@ impl FileBasedTokenMonitor {
         }
         
         time_series
+    }
+    
+    /// Calculate enhanced analytics for cache metrics and token ratios
+    fn calculate_enhanced_analytics(&self, session_entries: &[&UsageEntry], recent_entries: &[&UsageEntry], session_duration_minutes: f64) -> (f64, f64, f64) {
+        if session_entries.is_empty() {
+            return (0.0, 0.0, 0.0);
+        }
+        
+        // Calculate cache hit rate across all session entries
+        let mut total_input_tokens = 0u32;
+        let mut total_cache_read_tokens = 0u32;
+        let mut total_cache_creation_tokens = 0u32;
+        let mut total_output_tokens = 0u32;
+        
+        for entry in session_entries {
+            total_input_tokens += entry.usage.input_tokens;
+            total_cache_read_tokens += entry.usage.cache_read_tokens();
+            total_cache_creation_tokens += entry.usage.cache_creation_tokens();
+            total_output_tokens += entry.usage.output_tokens;
+        }
+        
+        // Cache hit rate: cache read tokens / (input tokens + cache creation tokens)
+        let total_effective_input = total_input_tokens + total_cache_creation_tokens;
+        let cache_hit_rate = if total_effective_input > 0 {
+            total_cache_read_tokens as f64 / total_effective_input as f64
+        } else {
+            0.0
+        };
+        
+        // Cache creation rate: cache creation tokens per minute
+        let cache_creation_rate = if session_duration_minutes > 0.0 {
+            total_cache_creation_tokens as f64 / session_duration_minutes
+        } else {
+            0.0
+        };
+        
+        // Input/Output ratio: total input tokens / total output tokens
+        let input_output_ratio = if total_output_tokens > 0 {
+            (total_input_tokens + total_cache_creation_tokens) as f64 / total_output_tokens as f64
+        } else {
+            0.0
+        };
+        
+        (cache_hit_rate, cache_creation_rate, input_output_ratio)
     }
     
     /// Get file sources analysis with token counts

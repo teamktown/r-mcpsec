@@ -93,6 +93,12 @@ impl<T: SessionService + Send + Sync + 'static> TokenMonitor<T> {
             efficiency_score,
             session_progress,
             usage_history: Vec::new(),
+            
+            // Default values for enhanced analytics
+            cache_hit_rate: 0.0,
+            cache_creation_rate: 0.0,
+            token_consumption_rate: usage_rate,
+            input_output_ratio: 1.0,
         })
     }
 
@@ -149,6 +155,12 @@ impl<T: SessionService + Send + Sync + 'static> TokenMonitor<T> {
                     efficiency_score: 1.0,
                     projected_depletion: None,
                     usage_history: Vec::new(),
+                    
+                    // Default values for enhanced analytics
+                    cache_hit_rate: 0.0,
+                    cache_creation_rate: 0.0,
+                    token_consumption_rate: 0.0,
+                    input_output_ratio: 1.0,
                 }
             })
         };

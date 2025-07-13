@@ -220,6 +220,12 @@ async fn run_monitor(
                 efficiency_score: 1.0,
                 projected_depletion: None,
                 usage_history: Vec::new(),
+                
+                // Default values for enhanced analytics
+                cache_hit_rate: 0.0,
+                cache_creation_rate: 0.0,
+                token_consumption_rate: 0.0,
+                input_output_ratio: 1.0,
             }
         })
     } else {
@@ -298,6 +304,12 @@ fn generate_mock_metrics(session: TokenSession) -> UsageMetrics {
         efficiency_score,
         projected_depletion: Some(chrono::Utc::now() + chrono::Duration::hours(2)),
         usage_history: Vec::new(),
+        
+        // Mock values for enhanced analytics
+        cache_hit_rate: rng.gen_range(0.1..0.8),
+        cache_creation_rate: rng.gen_range(10.0..50.0),
+        token_consumption_rate: usage_rate,
+        input_output_ratio: rng.gen_range(1.5..3.0),
     }
 }
 

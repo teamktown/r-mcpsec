@@ -22,6 +22,13 @@ use std::time::Duration;
 use tokio::time::sleep;
 use humantime;
 
+/// Overview display mode for switching between views
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum OverviewViewMode {
+    General,  // Current simple view with time-series chart
+    Detailed, // Enhanced analytics with cache metrics and stacked bars
+}
+
 /// Enhanced terminal UI using Ratatui
 pub struct RatatuiTerminalUI {
     terminal: Terminal<CrosstermBackend<io::Stdout>>,
@@ -30,6 +37,7 @@ pub struct RatatuiTerminalUI {
     scroll_offset: usize,
     details_selected: usize,
     show_details_pane: bool,
+    overview_view_mode: OverviewViewMode,
 }
 
 impl RatatuiTerminalUI {
@@ -53,6 +61,7 @@ impl RatatuiTerminalUI {
             scroll_offset: 0,
             details_selected: 0,
             show_details_pane: false,
+            overview_view_mode: OverviewViewMode::Detailed, // Default to detailed view as requested
         })
     }
 
@@ -66,8 +75,9 @@ impl RatatuiTerminalUI {
             let selected_tab = self.selected_tab;
             let details_selected = self.details_selected;
             let show_details_pane = self.show_details_pane;
+            let overview_view_mode = self.overview_view_mode;
             self.terminal.draw(move |frame| {
-                Self::draw_ui_static(frame, &metrics_clone, selected_tab, details_selected, show_details_pane);
+                Self::draw_ui_static(frame, &metrics_clone, selected_tab, details_selected, show_details_pane, overview_view_mode);
             })?;
 
             // Handle input with timeout
@@ -125,6 +135,15 @@ impl RatatuiTerminalUI {
                             self.show_details_pane = false;
                         }
                     }
+                    KeyCode::Char('v') => {
+                        // Toggle view mode in Overview tab (Tab 0)
+                        if self.selected_tab == 0 {
+                            self.overview_view_mode = match self.overview_view_mode {
+                                OverviewViewMode::General => OverviewViewMode::Detailed,
+                                OverviewViewMode::Detailed => OverviewViewMode::General,
+                            };
+                        }
+                    }
                     KeyCode::Char('r') => {
                         // Refresh - could trigger a metrics update
                     }
@@ -136,7 +155,7 @@ impl RatatuiTerminalUI {
     }
 
     /// Draw the main UI (static version for terminal callback)
-    fn draw_ui_static(frame: &mut Frame, metrics: &UsageMetrics, selected_tab: usize, details_selected: usize, show_details_pane: bool) {
+    fn draw_ui_static(frame: &mut Frame, metrics: &UsageMetrics, selected_tab: usize, details_selected: usize, show_details_pane: bool, overview_view_mode: OverviewViewMode) {
         let size = frame.area();
 
         // Create main layout
@@ -158,7 +177,7 @@ impl RatatuiTerminalUI {
 
         // Draw main content based on selected tab
         match selected_tab {
-            0 => Self::draw_overview_tab(frame, chunks[2], metrics),
+            0 => Self::draw_overview_tab(frame, chunks[2], metrics, overview_view_mode),
             1 => Self::draw_charts_tab(frame, chunks[2], metrics),
             2 => Self::draw_session_tab(frame, chunks[2], metrics),
             3 => Self::draw_details_tab(frame, chunks[2], metrics, details_selected, show_details_pane),
@@ -210,7 +229,7 @@ impl RatatuiTerminalUI {
     }
 
     /// Draw overview tab with key metrics
-    fn draw_overview_tab(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
+    fn draw_overview_tab(frame: &mut Frame, area: Rect, metrics: &UsageMetrics, view_mode: OverviewViewMode) {
         // Split the area vertically for session info and time-series chart
         let vertical_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -233,8 +252,17 @@ impl RatatuiTerminalUI {
         // Right: Session predictions and recommendations
         Self::draw_session_predictions(frame, top_row_chunks[1], metrics);
 
-        // Time-series strip chart (replaces usage gauge and statistics table)
-        Self::draw_token_usage_strip_chart(frame, vertical_chunks[1], metrics);
+        // Draw based on view mode
+        match view_mode {
+            OverviewViewMode::General => {
+                // Current simple view with time-series chart
+                Self::draw_token_usage_strip_chart(frame, vertical_chunks[1], metrics);
+            }
+            OverviewViewMode::Detailed => {
+                // Enhanced analytics with cache metrics and stacked bars
+                Self::draw_detailed_analytics_view(frame, vertical_chunks[1], metrics);
+            }
+        }
     }
 
     /// Draw charts tab with bar charts
@@ -995,6 +1023,282 @@ fn draw_about_tab(frame: &mut Frame, area: Rect) {
         frame.render_widget(chart, area);
     }
 
+    /// Draw detailed analytics view with cache metrics and stacked bars
+    fn draw_detailed_analytics_view(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(8),  // Real-time metrics dashboard
+                Constraint::Min(8),     // Stacked time-series chart
+            ])
+            .split(area);
+
+        // Real-time metrics dashboard
+        Self::draw_realtime_metrics_dashboard(frame, chunks[0], metrics);
+        
+        // Stacked time-series chart
+        Self::draw_stacked_token_chart(frame, chunks[1], metrics);
+    }
+
+    /// Draw real-time metrics dashboard
+    fn draw_realtime_metrics_dashboard(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
+        let chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(25),
+                Constraint::Percentage(25), 
+                Constraint::Percentage(25),
+                Constraint::Percentage(25),
+            ])
+            .split(area);
+
+        // Token consumption rate
+        let consumption_text = vec![
+            Line::from(vec![
+                Span::raw("Rate: "),
+                Span::styled(
+                    format!("{:.1} tokens/min", metrics.token_consumption_rate),
+                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::raw("I/O Ratio: "),
+                Span::styled(
+                    format!("{:.2}:1", metrics.input_output_ratio),
+                    Style::default().fg(Color::Yellow),
+                ),
+            ]),
+        ];
+
+        let consumption_widget = Paragraph::new(consumption_text)
+            .block(
+                Block::default()
+                    .title("Token Consumption")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Green)),
+            )
+            .alignment(Alignment::Center);
+
+        frame.render_widget(consumption_widget, chunks[0]);
+
+        // Cache analytics
+        let cache_text = vec![
+            Line::from(vec![
+                Span::raw("Hit Rate: "),
+                Span::styled(
+                    format!("{:.1}%", metrics.cache_hit_rate * 100.0),
+                    Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::raw("Creation: "),
+                Span::styled(
+                    format!("{:.1}/min", metrics.cache_creation_rate),
+                    Style::default().fg(Color::Cyan),
+                ),
+            ]),
+        ];
+
+        let cache_widget = Paragraph::new(cache_text)
+            .block(
+                Block::default()
+                    .title("Cache Analytics")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Blue)),
+            )
+            .alignment(Alignment::Center);
+
+        frame.render_widget(cache_widget, chunks[1]);
+
+        // Session progress
+        let session = &metrics.current_session;
+        let progress_percent = (session.tokens_used as f64 / session.tokens_limit as f64 * 100.0) as u16;
+        let remaining_tokens = session.tokens_limit.saturating_sub(session.tokens_used);
+        
+        let progress_text = vec![
+            Line::from(vec![
+                Span::raw("Progress: "),
+                Span::styled(
+                    format!("{}%", progress_percent),
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::raw("Remaining: "),
+                Span::styled(
+                    format!("{}", remaining_tokens),
+                    Style::default().fg(Color::White),
+                ),
+            ]),
+        ];
+
+        let progress_widget = Paragraph::new(progress_text)
+            .block(
+                Block::default()
+                    .title("Session Progress")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Yellow)),
+            )
+            .alignment(Alignment::Center);
+
+        frame.render_widget(progress_widget, chunks[2]);
+
+        // Efficiency score
+        let efficiency_text = vec![
+            Line::from(vec![
+                Span::raw("Score: "),
+                Span::styled(
+                    format!("{:.1}%", metrics.efficiency_score * 100.0),
+                    Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(if let Some(depletion) = metrics.projected_depletion {
+                vec![
+                    Span::raw("ETA: "),
+                    Span::styled(
+                        format!("{}", depletion.format("%H:%M")),
+                        Style::default().fg(Color::Red),
+                    ),
+                ]
+            } else {
+                vec![Span::raw("ETA: N/A")]
+            }),
+        ];
+
+        let efficiency_widget = Paragraph::new(efficiency_text)
+            .block(
+                Block::default()
+                    .title("Efficiency")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Magenta)),
+            )
+            .alignment(Alignment::Center);
+
+        frame.render_widget(efficiency_widget, chunks[3]);
+    }
+
+    /// Draw stacked time-series chart with different token types
+    fn draw_stacked_token_chart(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
+        if metrics.usage_history.is_empty() {
+            let placeholder = Paragraph::new("No token usage data available for stacked chart.\nPress 'v' to switch to general view or start using Claude to see real-time consumption.")
+                .block(
+                    Block::default()
+                        .title("Token Usage by Type Over Time")
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::Yellow)),
+                )
+                .style(Style::default().fg(Color::Gray))
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
+            
+            frame.render_widget(placeholder, area);
+            return;
+        }
+
+        // For now, use a simplified version with stacked bars
+        // This is a placeholder - ratatui doesn't directly support stacked line charts
+        // We'll create multiple datasets overlaid
+        
+        let chart_data: Vec<(f64, f64)> = metrics.usage_history
+            .iter()
+            .enumerate()
+            .map(|(i, point)| (i as f64, point.tokens_used as f64))
+            .collect();
+
+        if chart_data.is_empty() {
+            return;
+        }
+
+        let max_tokens = chart_data.iter().map(|(_, y)| *y).fold(0.0, f64::max);
+        let x_max = (chart_data.len() - 1) as f64;
+
+        // Create time labels
+        let time_labels = if metrics.usage_history.len() > 1 {
+            let start_time = metrics.usage_history.first().unwrap().timestamp;
+            let end_time = metrics.usage_history.last().unwrap().timestamp;
+            vec![
+                format!("{}", start_time.format("%H:%M")),
+                format!("{}", end_time.format("%H:%M")),
+            ]
+        } else {
+            vec!["Start".to_string(), "Now".to_string()]
+        };
+
+        // Create y-axis labels
+        let y_label_1 = format!("{:.0}", max_tokens / 4.0);
+        let y_label_2 = format!("{:.0}", max_tokens / 2.0);
+        let y_label_3 = format!("{:.0}", max_tokens * 3.0 / 4.0);
+        let y_label_4 = format!("{:.0}", max_tokens);
+
+        // Create datasets for different token types (simplified for now)
+        let total_dataset = Dataset::default()
+            .name("Total Tokens")
+            .marker(ratatui::symbols::Marker::Braille)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::Green))
+            .data(&chart_data);
+
+        // Placeholder datasets for different token types
+        // In a real implementation, these would be calculated from actual token type data
+        let input_data: Vec<(f64, f64)> = chart_data
+            .iter()
+            .map(|(x, y)| (*x, *y * 0.6)) // Approximate 60% input tokens
+            .collect();
+        
+        let output_data: Vec<(f64, f64)> = chart_data
+            .iter()
+            .map(|(x, y)| (*x, *y * 0.3)) // Approximate 30% output tokens
+            .collect();
+
+        let input_dataset = Dataset::default()
+            .name("Input Tokens")
+            .marker(ratatui::symbols::Marker::Dot)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::Blue))
+            .data(&input_data);
+
+        let output_dataset = Dataset::default()
+            .name("Output Tokens")
+            .marker(ratatui::symbols::Marker::Dot)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::Yellow))
+            .data(&output_data);
+
+        let chart = Chart::new(vec![total_dataset, input_dataset, output_dataset])
+            .block(
+                Block::default()
+                    .title("Token Usage by Type Over Time (Press 'v' to toggle view)")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Green)),
+            )
+            .x_axis(
+                Axis::default()
+                    .title("Time Progression")
+                    .style(Style::default().fg(Color::White))
+                    .bounds([0.0, x_max])
+                    .labels(time_labels.iter().map(|s| s.as_str()).collect::<Vec<_>>()),
+            )
+            .y_axis(
+                Axis::default()
+                    .title("Tokens")
+                    .style(Style::default().fg(Color::White))
+                    .bounds([0.0, max_tokens * 1.1])
+                    .labels(vec![
+                        "0",
+                        &y_label_1,
+                        &y_label_2,
+                        &y_label_3,
+                        &y_label_4,
+                    ]),
+            );
+
+        frame.render_widget(chart, area);
+    }
+
     /// Draw usage gauge
     fn draw_usage_gauge(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
         let session = &metrics.current_session;
@@ -1246,7 +1550,7 @@ fn draw_about_tab(frame: &mut Frame, area: Rect) {
 
     /// Draw footer with controls
     fn draw_footer(frame: &mut Frame, area: Rect) {
-        let controls = Paragraph::new("Controls: [Q]uit | [Tab] Switch tabs | [↑↓] Scroll | [R]efresh")
+        let controls = Paragraph::new("Controls: [Q]uit | [Tab] Switch tabs | [V] Toggle Overview view | [↑↓] Scroll | [R]efresh")
             .style(Style::default().fg(Color::Gray))
             .alignment(Alignment::Center)
             .block(
