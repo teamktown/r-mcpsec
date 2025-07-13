@@ -52,6 +52,7 @@ struct Cli {
     about: bool,
 }
 
+
 #[derive(Subcommand)]
 enum Commands {
     /// Start real-time monitoring (passive observation)
@@ -85,6 +86,13 @@ enum Commands {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    
+    // Add overflow checks in debug mode - PUT IT HERE
+    #[cfg(debug_assertions)]
+    std::panic::set_hook(Box::new(|panic_info| {
+        eprintln!("PANIC: {}", panic_info);
+        std::process::exit(1);
+    }));
     
     // Handle special flags first
     if cli.about {

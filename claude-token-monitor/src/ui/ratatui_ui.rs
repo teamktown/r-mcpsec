@@ -1415,98 +1415,104 @@ fn draw_about_tab(frame: &mut Frame, area: Rect) {
     }
 
     /// Draw horizontal bar chart for token usage
-    fn draw_token_usage_chart(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
-        let session = &metrics.current_session;
-        let used = session.tokens_used as u64;
-        let remaining = session.tokens_limit.saturating_sub(session.tokens_used) as u64;
-        let usage_percent = (used as f64 / session.tokens_limit as f64 * 100.0) as u64;
-        let remaining_percent = 100 - usage_percent;
+/// Draw horizontal bar chart for token usage
+fn draw_token_usage_chart(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
+    let session = &metrics.current_session;
+    let used = session.tokens_used.max(0) as u64; // Ensure non-negative
+    let remaining = session.tokens_limit.saturating_sub(session.tokens_used.max(0)) as u64;
+    let usage_percent = if session.tokens_limit > 0 {
+        ((used as f64 / session.tokens_limit as f64) * 100.0).min(100.0) as u64
+    } else {
+        0
+    };
+    let remaining_percent = 100u64.saturating_sub(usage_percent); // Safe subtraction
 
-        // Use percentage for better visibility, but show actual values in labels
-        let used_label = format!("Used ({})", used);
-        let remaining_label = format!("Remaining ({})", remaining);
-        let data = vec![
-            (used_label.as_str(), usage_percent.max(1)), // Ensure at least 1 for visibility
-            (remaining_label.as_str(), remaining_percent),
-        ];
+    // Use percentage for better visibility, but show actual values in labels
+    let used_label = format!("Used ({})", used);
+    let remaining_label = format!("Remaining ({})", remaining);
+    let data = vec![
+        (used_label.as_str(), usage_percent.max(1)), // Ensure at least 1 for visibility
+        (remaining_label.as_str(), remaining_percent.max(1)), // Ensure at least 1 for visibility
+    ];
 
-        let title = format!("Token Usage Distribution ({:.1}% used)", usage_percent);
-        
-        let barchart = BarChart::default()
-            .block(
-                Block::default()
-                    .title(title)
-                    .borders(Borders::ALL),
-            )
-            .data(&data)
-            .bar_width(6)
-            .bar_style(Style::default().fg(if usage_percent > 80 { Color::Red } else if usage_percent > 60 { Color::Yellow } else { Color::Green }))
-            .value_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+    let title = format!("Token Usage Distribution ({:.1}% used)", usage_percent);
+    
+    let barchart = BarChart::default()
+        .block(
+            Block::default()
+                .title(title)
+                .borders(Borders::ALL),
+        )
+        .data(&data)
+        .bar_width(6)
+        .bar_style(Style::default().fg(if usage_percent > 80 { Color::Red } else if usage_percent > 60 { Color::Yellow } else { Color::Green }))
+        .value_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
 
-        frame.render_widget(barchart, area);
-    }
-
+    frame.render_widget(barchart, area);
+}
     /// Draw usage history chart
-    fn draw_usage_history_chart(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(8),  // Time period chart
-                Constraint::Min(4),     // Usage trend chart
-            ])
-            .split(area);
+/// Draw usage history chart
+fn draw_usage_history_chart(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(8),  // Time period chart
+            Constraint::Min(4),     // Usage trend chart
+        ])
+        .split(area);
 
-        // Time period usage summary - use more realistic mock progression
-        let current_tokens = metrics.current_session.tokens_used;
-        
-        // Better mock data that shows meaningful progression
-        let base = current_tokens.max(100); // Ensure we have some baseline
-        let period_data = vec![
-            ("Last 12h", base as u64),
-            ("Last 24h", (base + (base / 4)) as u64),
-            ("Last 48h", (base + (base / 2)) as u64),
-            ("Last 7d", (base + base) as u64),
-        ];
+    // Time period usage summary - use safe arithmetic
+    let current_tokens = metrics.current_session.tokens_used.max(0) as u64; // Ensure non-negative
+    
+    // Better mock data that shows meaningful progression
+    let base = current_tokens.max(100); // Ensure we have some baseline
+    let period_data = vec![
+        ("Last 12h", base),
+        ("Last 24h", base + (base / 4)),
+        ("Last 48h", base + (base / 2)),
+        ("Last 7d", base + base),
+    ];
 
-        let period_chart = BarChart::default()
-            .block(
-                Block::default()
-                    .title("Token Usage by Time Period")
-                    .borders(Borders::ALL),
-            )
-            .data(&period_data)
-            .bar_width(8)
-            .bar_style(Style::default().fg(Color::Yellow))
-            .value_style(Style::default().fg(Color::Black).bg(Color::Yellow));
+    let period_chart = BarChart::default()
+        .block(
+            Block::default()
+                .title("Token Usage by Time Period")
+                .borders(Borders::ALL),
+        )
+        .data(&period_data)
+        .bar_width(8)
+        .bar_style(Style::default().fg(Color::Yellow))
+        .value_style(Style::default().fg(Color::Black).bg(Color::Yellow));
 
-        frame.render_widget(period_chart, chunks[0]);
+    frame.render_widget(period_chart, chunks[0]);
 
-        // Recent usage trend - show realistic progression
-        let current = current_tokens as u64;
-        let step = (current / 6).max(10); // Ensure visible progression
-        let trend_data = vec![
-            ("6h ago", current.saturating_sub(step * 5)),
-            ("4h ago", current.saturating_sub(step * 4)),
-            ("2h ago", current.saturating_sub(step * 3)),
-            ("1h ago", current.saturating_sub(step * 2)),
-            ("30m ago", current.saturating_sub(step)),
-            ("Now", current),
-        ];
+    // Recent usage trend - show realistic progression with safe arithmetic
+    let current = current_tokens.max(10); // Ensure minimum value
+    let step = (current / 6).max(1); // Safe step calculation
+    
+    // Use safe subtraction - this is the key fix
+    let trend_data = vec![
+        ("6h ago", current.saturating_sub(step * 5)),
+        ("4h ago", current.saturating_sub(step * 4)),
+        ("2h ago", current.saturating_sub(step * 3)),
+        ("1h ago", current.saturating_sub(step * 2)),
+        ("30m ago", current.saturating_sub(step)),
+        ("Now", current),
+    ];
 
-        let trend_chart = BarChart::default()
-            .block(
-                Block::default()
-                    .title("Recent Usage Trend")
-                    .borders(Borders::ALL),
-            )
-            .data(&trend_data)
-            .bar_width(3)
-            .bar_style(Style::default().fg(Color::Cyan))
-            .value_style(Style::default().fg(Color::Black).bg(Color::Cyan));
+    let trend_chart = BarChart::default()
+        .block(
+            Block::default()
+                .title("Recent Usage Trend")
+                .borders(Borders::ALL),
+        )
+        .data(&trend_data)
+        .bar_width(3)
+        .bar_style(Style::default().fg(Color::Cyan))
+        .value_style(Style::default().fg(Color::Black).bg(Color::Cyan));
 
-        frame.render_widget(trend_chart, chunks[1]);
-    }
-
+    frame.render_widget(trend_chart, chunks[1]);
+}
     /// Draw detailed current session information
     fn draw_current_session_details(frame: &mut Frame, area: Rect, session: &TokenSession) {
         let details = vec![
