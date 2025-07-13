@@ -70,6 +70,8 @@ impl RatatuiTerminalUI {
         let current_metrics = metrics.clone();
         
         loop {
+            eprintln!("🔍 DEBUG: Main UI loop iteration - current_tab: {}, should_exit: {}", self.selected_tab, self.should_exit);
+            
             // Draw the UI
             let metrics_clone = current_metrics.clone();
             let selected_tab = self.selected_tab;
@@ -81,7 +83,10 @@ impl RatatuiTerminalUI {
             })?;
 
             // Handle input with timeout
-            if self.handle_input().await? {
+            let should_exit = self.handle_input().await?;
+            eprintln!("🔍 DEBUG: handle_input returned: {}", should_exit);
+            if should_exit {
+                eprintln!("🔍 DEBUG: Breaking from main loop due to handle_input returning true");
                 break;
             }
 
@@ -96,22 +101,32 @@ impl RatatuiTerminalUI {
     async fn handle_input(&mut self) -> Result<bool> {
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
+                // Debug: Log all key events
+                eprintln!("🔍 DEBUG: Key event - code: {:?}, modifiers: {:?}, current_tab: {}", code, modifiers, self.selected_tab);
+                
                 match code {
                     KeyCode::Char('q') | KeyCode::Esc => {
+                        eprintln!("🔍 DEBUG: Quit key pressed, exiting application");
                         self.should_exit = true;
                         return Ok(true);
                     }
                     KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
+                        eprintln!("🔍 DEBUG: Ctrl+C pressed, exiting application");
                         self.should_exit = true;
                         return Ok(true);
                     }
                     KeyCode::Tab => {
+                        let old_tab = self.selected_tab;
                         self.selected_tab = (self.selected_tab + 1) % 7;
+                        eprintln!("🔍 DEBUG: Tab key pressed - changed from tab {} to tab {}", old_tab, self.selected_tab);
                     }
                     KeyCode::BackTab => {
+                        let old_tab = self.selected_tab;
                         self.selected_tab = if self.selected_tab == 0 { 6 } else { self.selected_tab - 1 };
+                        eprintln!("🔍 DEBUG: BackTab key pressed - changed from tab {} to tab {}", old_tab, self.selected_tab);
                     }
                     KeyCode::Up => {
+                        eprintln!("🔍 DEBUG: Up arrow pressed");
                         if self.selected_tab == 3 { // Details tab
                             self.details_selected = self.details_selected.saturating_sub(1);
                         } else {
@@ -119,6 +134,7 @@ impl RatatuiTerminalUI {
                         }
                     }
                     KeyCode::Down => {
+                        eprintln!("🔍 DEBUG: Down arrow pressed");
                         if self.selected_tab == 3 { // Details tab
                             self.details_selected = self.details_selected.saturating_add(1).min(10); // Max items
                         } else {
@@ -126,31 +142,53 @@ impl RatatuiTerminalUI {
                         }
                     }
                     KeyCode::Right => {
+                        eprintln!("🔍 DEBUG: Right arrow pressed");
                         if self.selected_tab == 3 { // Details tab
                             self.show_details_pane = true;
                         }
                     }
                     KeyCode::Left => {
+                        eprintln!("🔍 DEBUG: Left arrow pressed");
                         if self.selected_tab == 3 { // Details tab
                             self.show_details_pane = false;
                         }
                     }
                     KeyCode::Char('v') => {
+                        eprintln!("🔍 DEBUG: 'v' key pressed - toggling overview view mode");
                         // Toggle view mode in Overview tab (Tab 0)
                         if self.selected_tab == 0 {
+                            let old_mode = self.overview_view_mode;
                             self.overview_view_mode = match self.overview_view_mode {
                                 OverviewViewMode::General => OverviewViewMode::Detailed,
                                 OverviewViewMode::Detailed => OverviewViewMode::General,
                             };
+                            eprintln!("🔍 DEBUG: Overview view mode changed from {:?} to {:?}", old_mode, self.overview_view_mode);
+                        } else {
+                            eprintln!("🔍 DEBUG: 'v' key pressed but not in Overview tab (current tab: {})", self.selected_tab);
                         }
                     }
                     KeyCode::Char('r') => {
+                        eprintln!("🔍 DEBUG: 'r' key pressed - refresh");
                         // Refresh - could trigger a metrics update
                     }
-                    _ => {}
+                    KeyCode::Char('n') => {
+                        eprintln!("🔍 DEBUG: 'n' key pressed - alternative tab switch");
+                        let old_tab = self.selected_tab;
+                        self.selected_tab = (self.selected_tab + 1) % 7;
+                        eprintln!("🔍 DEBUG: Alternative tab switch - changed from tab {} to tab {}", old_tab, self.selected_tab);
+                    }
+                    _ => {
+                        eprintln!("🔍 DEBUG: Unhandled key: {:?}", code);
+                    }
                 }
+            } else {
+                let other_event = event::read()?;
+                eprintln!("🔍 DEBUG: Non-key event received: {:?}", other_event);
             }
+        } else {
+            eprintln!("🔍 DEBUG: No event available (poll timeout)");
         }
+        eprintln!("🔍 DEBUG: handle_input returning false (continue)");
         Ok(false)
     }
 
@@ -1550,7 +1588,7 @@ fn draw_about_tab(frame: &mut Frame, area: Rect) {
 
     /// Draw footer with controls
     fn draw_footer(frame: &mut Frame, area: Rect) {
-        let controls = Paragraph::new("Controls: [Q]uit | [Tab] Switch tabs | [V] Toggle Overview view | [↑↓] Scroll | [R]efresh")
+        let controls = Paragraph::new("Controls: [Q]uit | [Tab/N] Switch tabs | [V] Toggle Overview view | [↑↓] Scroll | [R]efresh")
             .style(Style::default().fg(Color::Gray))
             .alignment(Alignment::Center)
             .block(
