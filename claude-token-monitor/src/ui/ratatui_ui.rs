@@ -1,5 +1,6 @@
 use crate::models::*;
 use anyhow::Result;
+use log::debug;
 use atty;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
@@ -70,7 +71,7 @@ impl RatatuiTerminalUI {
         let current_metrics = metrics.clone();
         
         loop {
-            eprintln!("🔍 DEBUG: Main UI loop iteration - current_tab: {}, should_exit: {}", self.selected_tab, self.should_exit);
+            debug!("🔍 DEBUG: Main UI loop iteration - current_tab: {}, should_exit: {}", self.selected_tab, self.should_exit);
             
             // Draw the UI
             let metrics_clone = current_metrics.clone();
@@ -84,9 +85,9 @@ impl RatatuiTerminalUI {
 
             // Handle input with timeout
             let should_exit = self.handle_input().await?;
-            eprintln!("🔍 DEBUG: handle_input returned: {}", should_exit);
+            debug!("🔍 DEBUG: handle_input returned: {}", should_exit);
             if should_exit {
-                eprintln!("🔍 DEBUG: Breaking from main loop due to handle_input returning true");
+                debug!("🔍 DEBUG: Breaking from main loop due to handle_input returning true");
                 break;
             }
 
@@ -102,31 +103,31 @@ impl RatatuiTerminalUI {
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
                 // Debug: Log all key events
-                eprintln!("🔍 DEBUG: Key event - code: {:?}, modifiers: {:?}, current_tab: {}", code, modifiers, self.selected_tab);
+                debug!("🔍 DEBUG: Key event - code: {:?}, modifiers: {:?}, current_tab: {}", code, modifiers, self.selected_tab);
                 
                 match code {
                     KeyCode::Char('q') | KeyCode::Esc => {
-                        eprintln!("🔍 DEBUG: Quit key pressed, exiting application");
+                        debug!("🔍 DEBUG: Quit key pressed, exiting application");
                         self.should_exit = true;
                         return Ok(true);
                     }
                     KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
-                        eprintln!("🔍 DEBUG: Ctrl+C pressed, exiting application");
+                        debug!("🔍 DEBUG: Ctrl+C pressed, exiting application");
                         self.should_exit = true;
                         return Ok(true);
                     }
                     KeyCode::Tab => {
                         let old_tab = self.selected_tab;
                         self.selected_tab = (self.selected_tab + 1) % 7;
-                        eprintln!("🔍 DEBUG: Tab key pressed - changed from tab {} to tab {}", old_tab, self.selected_tab);
+                        debug!("🔍 DEBUG: Tab key pressed - changed from tab {} to tab {}", old_tab, self.selected_tab);
                     }
                     KeyCode::BackTab => {
                         let old_tab = self.selected_tab;
                         self.selected_tab = if self.selected_tab == 0 { 6 } else { self.selected_tab - 1 };
-                        eprintln!("🔍 DEBUG: BackTab key pressed - changed from tab {} to tab {}", old_tab, self.selected_tab);
+                        debug!("🔍 DEBUG: BackTab key pressed - changed from tab {} to tab {}", old_tab, self.selected_tab);
                     }
                     KeyCode::Up => {
-                        eprintln!("🔍 DEBUG: Up arrow pressed");
+                        debug!("🔍 DEBUG: Up arrow pressed");
                         if self.selected_tab == 3 { // Details tab
                             self.details_selected = self.details_selected.saturating_sub(1);
                         } else {
@@ -134,7 +135,7 @@ impl RatatuiTerminalUI {
                         }
                     }
                     KeyCode::Down => {
-                        eprintln!("🔍 DEBUG: Down arrow pressed");
+                        debug!("🔍 DEBUG: Down arrow pressed");
                         if self.selected_tab == 3 { // Details tab
                             self.details_selected = self.details_selected.saturating_add(1).min(10); // Max items
                         } else {
@@ -142,19 +143,19 @@ impl RatatuiTerminalUI {
                         }
                     }
                     KeyCode::Right => {
-                        eprintln!("🔍 DEBUG: Right arrow pressed");
+                        debug!("🔍 DEBUG: Right arrow pressed");
                         if self.selected_tab == 3 { // Details tab
                             self.show_details_pane = true;
                         }
                     }
                     KeyCode::Left => {
-                        eprintln!("🔍 DEBUG: Left arrow pressed");
+                        debug!("🔍 DEBUG: Left arrow pressed");
                         if self.selected_tab == 3 { // Details tab
                             self.show_details_pane = false;
                         }
                     }
                     KeyCode::Char('v') => {
-                        eprintln!("🔍 DEBUG: 'v' key pressed - toggling overview view mode");
+                        debug!("🔍 DEBUG: 'v' key pressed - toggling overview view mode");
                         // Toggle view mode in Overview tab (Tab 0)
                         if self.selected_tab == 0 {
                             let old_mode = self.overview_view_mode;
@@ -162,33 +163,33 @@ impl RatatuiTerminalUI {
                                 OverviewViewMode::General => OverviewViewMode::Detailed,
                                 OverviewViewMode::Detailed => OverviewViewMode::General,
                             };
-                            eprintln!("🔍 DEBUG: Overview view mode changed from {:?} to {:?}", old_mode, self.overview_view_mode);
+                            debug!("🔍 DEBUG: Overview view mode changed from {:?} to {:?}", old_mode, self.overview_view_mode);
                         } else {
-                            eprintln!("🔍 DEBUG: 'v' key pressed but not in Overview tab (current tab: {})", self.selected_tab);
+                            debug!("🔍 DEBUG: 'v' key pressed but not in Overview tab (current tab: {})", self.selected_tab);
                         }
                     }
                     KeyCode::Char('r') => {
-                        eprintln!("🔍 DEBUG: 'r' key pressed - refresh");
+                        debug!("🔍 DEBUG: 'r' key pressed - refresh");
                         // Refresh - could trigger a metrics update
                     }
                     KeyCode::Char('n') => {
-                        eprintln!("🔍 DEBUG: 'n' key pressed - alternative tab switch");
+                        debug!("🔍 DEBUG: 'n' key pressed - alternative tab switch");
                         let old_tab = self.selected_tab;
                         self.selected_tab = (self.selected_tab + 1) % 7;
-                        eprintln!("🔍 DEBUG: Alternative tab switch - changed from tab {} to tab {}", old_tab, self.selected_tab);
+                        debug!("🔍 DEBUG: Alternative tab switch - changed from tab {} to tab {}", old_tab, self.selected_tab);
                     }
                     _ => {
-                        eprintln!("🔍 DEBUG: Unhandled key: {:?}", code);
+                        debug!("🔍 DEBUG: Unhandled key: {:?}", code);
                     }
                 }
             } else {
                 let other_event = event::read()?;
-                eprintln!("🔍 DEBUG: Non-key event received: {:?}", other_event);
+                debug!("🔍 DEBUG: Non-key event received: {:?}", other_event);
             }
         } else {
-            eprintln!("🔍 DEBUG: No event available (poll timeout)");
+            debug!("🔍 DEBUG: No event available (poll timeout)");
         }
-        eprintln!("🔍 DEBUG: handle_input returning false (continue)");
+        debug!("🔍 DEBUG: handle_input returning false (continue)");
         Ok(false)
     }
 
@@ -847,64 +848,6 @@ fn draw_about_tab(frame: &mut Frame, area: Rect) {
     frame.render_widget(version_list, area);
 }
 
-    /// Draw session information panel
-    fn draw_session_info(frame: &mut Frame, area: Rect, session: &TokenSession) {
-        let plan_str = match &session.plan_type {
-            PlanType::Pro => "Pro (40k tokens)",
-            PlanType::Max5 => "Max5 (20k tokens)",
-            PlanType::Max20 => "Max20 (100k tokens)",
-            PlanType::Custom(limit) => &format!("Custom ({}k tokens)", limit / 1000),
-        };
-
-        let status_style = if session.is_active {
-            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
-        };
-
-        let session_info = vec![
-            Line::from(vec![
-                Span::raw("Plan: "),
-                Span::styled(plan_str, Style::default().fg(Color::Cyan)),
-            ]),
-            Line::from(vec![
-                Span::raw("Status: "),
-                Span::styled(
-                    if session.is_active { "ACTIVE (OBSERVED)" } else { "INACTIVE (OBSERVED)" },
-                    status_style,
-                ),
-            ]),
-            Line::from(vec![
-                Span::raw("Session ID: "),
-                Span::styled(&session.id[..12], Style::default().fg(Color::Yellow)),
-            ]),
-            Line::from(vec![
-                Span::raw("Started: "),
-                Span::styled(
-                    session.start_time.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
-                    Style::default().fg(Color::White),
-                ),
-            ]),
-            Line::from(vec![
-                Span::raw("Resets: "),
-                Span::styled(
-                    session.reset_time.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
-                    Style::default().fg(Color::White),
-                ),
-            ]),
-        ];
-
-        let paragraph = Paragraph::new(session_info)
-            .block(
-                Block::default()
-                    .title("Observed Session Information")
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Blue)),
-            )
-            .wrap(Wrap { trim: true });
-
-        frame.render_widget(paragraph, area);
-    }
 
     /// Draw session info with filename for Overview tab
     fn draw_session_info_with_filename(frame: &mut Frame, area: Rect, session: &TokenSession) {
@@ -1337,83 +1280,8 @@ fn draw_about_tab(frame: &mut Frame, area: Rect) {
         frame.render_widget(chart, area);
     }
 
-    /// Draw usage gauge
-    fn draw_usage_gauge(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
-        let session = &metrics.current_session;
-        let usage_ratio = session.tokens_used as f64 / session.tokens_limit as f64;
-        let usage_percent = (usage_ratio * 100.0) as u16;
-
-        let gauge_color = if usage_ratio > 0.9 {
-            Color::Red
-        } else if usage_ratio > 0.75 {
-            Color::Yellow
-        } else {
-            Color::Green
-        };
-
-        let gauge = Gauge::default()
-            .block(
-                Block::default()
-                    .title("Token Usage")
-                    .borders(Borders::ALL),
-            )
-            .gauge_style(Style::default().fg(gauge_color))
-            .percent(usage_percent)
-            .label(format!(
-                "{} / {} tokens ({}%)",
-                session.tokens_used, session.tokens_limit, usage_percent
-            ));
-
-        frame.render_widget(gauge, area);
-    }
-
-    /// Draw statistics table
-    fn draw_statistics_table(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
-        let rows = vec![
-            Row::new(vec![
-                Cell::from("Usage Rate"),
-                Cell::from(format!("{:.2} tokens/min", metrics.usage_rate)),
-            ]),
-            Row::new(vec![
-                Cell::from("Session Progress"),
-                Cell::from(format!("{:.1}%", metrics.session_progress * 100.0)),
-            ]),
-            Row::new(vec![
-                Cell::from("Efficiency Score"),
-                Cell::from(format!("{:.2}", metrics.efficiency_score)),
-            ]),
-            Row::new(vec![
-                Cell::from("Projected Depletion"),
-                Cell::from(if let Some(depletion) = &metrics.projected_depletion {
-                    let time_remaining = depletion.signed_duration_since(chrono::Utc::now());
-                    let hours = time_remaining.num_hours();
-                    let minutes = time_remaining.num_minutes() % 60;
-                    format!("{}h {}m", hours, minutes)
-                } else {
-                    "No prediction".to_string()
-                }),
-            ]),
-        ];
-
-        let table = Table::new(
-            rows,
-            [Constraint::Percentage(50), Constraint::Percentage(50)],
-        )
-        .block(
-            Block::default()
-                .title("Usage Statistics")
-                .borders(Borders::ALL),
-        )
-        .header(
-            Row::new(vec!["Metric", "Value"])
-                .style(Style::default().add_modifier(Modifier::BOLD))
-                .bottom_margin(1),
-        )
-        .column_spacing(1);
-
-        frame.render_widget(table, area);
-    }
-
+   
+   
     /// Draw horizontal bar chart for token usage
 /// Draw horizontal bar chart for token usage
 fn draw_token_usage_chart(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {

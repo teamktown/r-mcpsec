@@ -620,7 +620,7 @@ impl FileBasedTokenMonitor {
     }
     
     /// Calculate enhanced analytics for cache metrics and token ratios
-    fn calculate_enhanced_analytics(&self, session_entries: &[&UsageEntry], recent_entries: &[&UsageEntry], session_duration_minutes: f64) -> (f64, f64, f64) {
+    fn calculate_enhanced_analytics(&self, session_entries: &[&UsageEntry], _recent_entries: &[&UsageEntry], session_duration_minutes: f64) -> (f64, f64, f64) {
         if session_entries.is_empty() {
             return (0.0, 0.0, 0.0);
         }

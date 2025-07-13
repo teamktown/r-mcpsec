@@ -14,6 +14,7 @@ use tokio::sync::RwLock;
 use anyhow::Result;
 use humantime;
 use chrono::Utc;
+use log::debug;
 
 #[derive(Parser)]
 #[command(name = "claude-token-monitor")]
@@ -90,7 +91,7 @@ async fn main() -> Result<()> {
     // Add overflow checks in debug mode - PUT IT HERE
     #[cfg(debug_assertions)]
     std::panic::set_hook(Box::new(|panic_info| {
-        eprintln!("PANIC: {}", panic_info);
+        debug!("PANIC: {}", panic_info);
         std::process::exit(1);
     }));
     
@@ -106,9 +107,24 @@ async fn main() -> Result<()> {
     }
     
     // Initialize logging
-    let log_level = if cli.verbose { "debug" } else { "info" };
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level))
+    if cli.verbose {
+    // Log to file when verbose
+    use std::fs::OpenOptions;
+    let log_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("debug.log")?;
+    
+    env_logger::Builder::new()
+        .filter_level(log::LevelFilter::Debug)
+        .target(env_logger::Target::Pipe(Box::new(log_file)))
         .init();
+} else {
+    // Normal logging to stderr for info/warn/error
+    env_logger::Builder::new()
+        .filter_level(log::LevelFilter::Info)
+        .init();
+}
 
     // Setup data directory
     let data_dir = dirs::data_dir()
@@ -146,9 +162,9 @@ async fn main() -> Result<()> {
                 Some(monitor)
             }
             Err(e) => {
-                eprintln!("⚠️ Failed to initialize file monitor: {}", e);
-                eprintln!("💡 Tip: Use --force-mock for development/testing with simulated data");
-                eprintln!("📁 Make sure Claude Code has created usage files in ~/.claude/projects/");
+                debug!("⚠️ Failed to initialize file monitor: {}", e);
+                debug!("💡 Tip: Use --force-mock for development/testing with simulated data");
+                debug!("📁 Make sure Claude Code has created usage files in ~/.claude/projects/");
                 None
             }
         }
@@ -237,7 +253,7 @@ async fn run_monitor(
             }
         })
     } else {
-        eprintln!("❌ No file monitor available and not in mock mode");
+        debug!("❌ No file monitor available and not in mock mode");
         std::process::exit(1);
     };
     
@@ -263,8 +279,8 @@ async fn run_monitor(
                 result
             }
             Err(e) => {
-                eprintln!("💡 Enhanced UI not available: {}", e);
-                eprintln!("   Falling back to summary display...");
+                debug!("💡 Enhanced UI not available: {}", e);
+                debug!("   Falling back to summary display...");
                 Err(e)
             }
         }
