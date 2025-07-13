@@ -12,14 +12,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use anyhow::Result;
-use humantime;
 use chrono::Utc;
 use log::debug;
 
 #[derive(Parser)]
 #[command(name = "claude-token-monitor")]
 #[command(about = "A lightweight Rust client for Claude token usage monitoring")]
-#[command(version = "0.2.3")]
+#[command(version = "0.2.6")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -91,7 +90,7 @@ async fn main() -> Result<()> {
     // Add overflow checks in debug mode - PUT IT HERE
     #[cfg(debug_assertions)]
     std::panic::set_hook(Box::new(|panic_info| {
-        debug!("PANIC: {}", panic_info);
+        debug!("PANIC: {panic_info}");
         std::process::exit(1);
     }));
     
@@ -162,7 +161,7 @@ async fn main() -> Result<()> {
                 Some(monitor)
             }
             Err(e) => {
-                debug!("⚠️ Failed to initialize file monitor: {}", e);
+                debug!("⚠️ Failed to initialize file monitor: {e}");
                 debug!("💡 Tip: Use --force-mock for development/testing with simulated data");
                 debug!("📁 Make sure Claude Code has created usage files in ~/.claude/projects/");
                 None
@@ -205,7 +204,7 @@ async fn run_monitor(
     use_mock: bool,
 ) -> Result<()> {
     println!("🧠 Claude Token Monitor - File-Based Edition");
-    println!("Starting monitoring with plan: {:?}", plan_type);
+    println!("Starting monitoring with plan: {plan_type:?}");
     
     // Update observed sessions from JSONL data (passive monitoring)
     session_service.write().await.update_observed_sessions().await?;
@@ -279,7 +278,7 @@ async fn run_monitor(
                 result
             }
             Err(e) => {
-                debug!("💡 Enhanced UI not available: {}", e);
+                debug!("💡 Enhanced UI not available: {e}");
                 debug!("   Falling back to summary display...");
                 Err(e)
             }
@@ -418,11 +417,11 @@ async fn configure_monitor(
     
     if let Some(interval_val) = interval {
         config.update_interval_seconds = interval_val;
-        println!("✅ Set update interval to: {} seconds", interval_val);
+        println!("✅ Set update interval to: {interval_val} seconds");
     }
     
     if let Some(threshold_val) = threshold {
-        if threshold_val >= 0.0 && threshold_val <= 1.0 {
+        if (0.0..=1.0).contains(&threshold_val) {
             config.warning_threshold = threshold_val;
             println!("✅ Set warning threshold to: {:.1}%", threshold_val * 100.0);
         } else {
@@ -473,7 +472,7 @@ fn show_about() {
     println!("{}", "📱 Claude Token Monitor".bright_cyan().bold());
     println!();
     println!("{}", "📋 Version Information:".bright_yellow().bold());
-    println!("  Version: {}", "v0.2.3".bright_green());
+    println!("  Version: {}", "v0.2.6".bright_green());
     println!("  Name: {}", "claude-token-monitor".bright_white());
     println!("  Description: A lightweight Rust client for Claude token usage monitoring");
     println!();

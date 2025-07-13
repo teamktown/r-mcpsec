@@ -126,7 +126,7 @@ impl TerminalUI {
             PlanType::Pro => "Pro",
             PlanType::Max5 => "Max5",
             PlanType::Max20 => "Max20",
-            PlanType::Custom(limit) => &format!("Custom({})", limit),
+            PlanType::Custom(limit) => &format!("Custom({limit})"),
         };
 
         let status_color = if session.is_active {
@@ -173,7 +173,7 @@ impl TerminalUI {
             SetForegroundColor(Color::DarkGrey),
             Print("░".repeat(bar_width - filled_width)),
             ResetColor,
-            Print(&format!(" {:.1}%\n", usage_percent)),
+            Print(&format!(" {usage_percent:.1}%\n")),
             Print(&format!("  {} / {} tokens used\n\n", session.tokens_used, session.tokens_limit))
         )?;
         Ok(())
@@ -212,7 +212,7 @@ impl TerminalUI {
                 stdout,
                 Print("  Projected Depletion: "),
                 SetForegroundColor(warning_color),
-                Print(&format!("{}h {}m", hours, minutes)),
+                Print(&format!("{hours}h {minutes}m")),
                 ResetColor,
                 Print(&format!(" ({})\n", depletion_time.format("%H:%M:%S UTC")))
             )?;
@@ -257,10 +257,10 @@ pub fn format_duration(duration: chrono::Duration) -> String {
     let seconds = total_seconds % 60;
     
     if hours > 0 {
-        format!("{}h {}m {}s", hours, minutes, seconds)
+        format!("{hours}h {minutes}m {seconds}s")
     } else if minutes > 0 {
-        format!("{}m {}s", minutes, seconds)
+        format!("{minutes}m {seconds}s")
     } else {
-        format!("{}s", seconds)
+        format!("{seconds}s")
     }
 }

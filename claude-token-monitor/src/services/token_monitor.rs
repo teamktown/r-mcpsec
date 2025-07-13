@@ -115,7 +115,7 @@ impl<T: SessionService + Send + Sync + 'static> TokenMonitor<T> {
             }
 
             if let Err(e) = self.update_usage_async().await {
-                log::error!("Error updating usage: {}", e);
+                log::error!("Error updating usage: {e}");
             }
         }
         
@@ -193,7 +193,7 @@ impl<T: SessionService + Send + Sync + 'static> TokenMonitorService for TokenMon
         let monitor = self.clone();
         tokio::spawn(async move {
             if let Err(e) = monitor.monitoring_loop().await {
-                log::error!("Monitoring loop error: {}", e);
+                log::error!("Monitoring loop error: {e}");
             }
         });
 

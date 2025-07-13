@@ -85,7 +85,7 @@ impl RatatuiTerminalUI {
 
             // Handle input with timeout
             let should_exit = self.handle_input().await?;
-            debug!("🔍 DEBUG: handle_input returned: {}", should_exit);
+            debug!("🔍 DEBUG: handle_input returned: {should_exit}");
             if should_exit {
                 debug!("🔍 DEBUG: Breaking from main loop due to handle_input returning true");
                 break;
@@ -179,12 +179,12 @@ impl RatatuiTerminalUI {
                         debug!("🔍 DEBUG: Alternative tab switch - changed from tab {} to tab {}", old_tab, self.selected_tab);
                     }
                     _ => {
-                        debug!("🔍 DEBUG: Unhandled key: {:?}", code);
+                        debug!("🔍 DEBUG: Unhandled key: {code:?}");
                     }
                 }
             } else {
                 let other_event = event::read()?;
-                debug!("🔍 DEBUG: Non-key event received: {:?}", other_event);
+                debug!("🔍 DEBUG: Non-key event received: {other_event:?}");
             }
         } else {
             debug!("🔍 DEBUG: No event available (poll timeout)");
@@ -236,9 +236,7 @@ impl RatatuiTerminalUI {
         let version = env!("CARGO_PKG_VERSION");
         
         let header_text = format!(
-            "🧠 Claude Token Monitor - Rust Edition v{} (Built: {})", 
-            version, 
-            build_time
+            "🧠 Claude Token Monitor - Rust Edition v{version} (Built: {build_time})"
         );
         
         let title = Paragraph::new(header_text)
@@ -346,13 +344,11 @@ impl RatatuiTerminalUI {
             .split(area);
 
         // Current Settings
-        let settings_info = vec![
-            "Default Plan: Pro".to_string(),
+        let settings_info = ["Default Plan: Pro".to_string(),
             "Update Interval: 3s".to_string(),
             "Warning Threshold: 85.0%".to_string(),
             "Auto Switch Plans: true".to_string(),
-            "Timezone: UTC".to_string(),
-        ];
+            "Timezone: UTC".to_string()];
 
         let settings_items: Vec<ListItem> = settings_info
             .iter()
@@ -427,8 +423,7 @@ impl RatatuiTerminalUI {
         };
 
         // Left panel - list of details categories
-        let detail_items = vec![
-            "📊 Token Usage Breakdown",
+        let detail_items = ["📊 Token Usage Breakdown",
             "📈 Usage Rate Analysis", 
             "⏱️ Session Timeline",
             "💾 Cache Token Details",
@@ -438,8 +433,7 @@ impl RatatuiTerminalUI {
             "🎯 Usage Predictions",
             "📋 Recent Activity",
             "⚙️ Configuration",
-            "🔗 Session Links",
-        ];
+            "🔗 Session Links"];
 
         let items: Vec<ListItem> = detail_items
             .iter()
@@ -779,14 +773,12 @@ impl RatatuiTerminalUI {
 /// Draw security tab with security recommendations
 fn draw_security_tab(frame: &mut Frame, area: Rect) {
     // Recommendations
-    let recommendations = vec![
-        "🛡️ Security related aspects:".to_string(),
+    let recommendations = ["🛡️ Security related aspects:".to_string(),
         "• Memory safety via Rust ownership + overflow checks enabled".to_string(),
         "• Comprehensive input validation with boundary checking".to_string(),
         "• Resource limits prevent DoS attacks via malformed data".to_string(),
         "• Path canonicalization in place".to_string(),
-        "• Information security through sensitive data redaction when debugging".to_string(),
-    ];
+        "• Information security through sensitive data redaction when debugging".to_string()];
 
     let rec_items: Vec<ListItem> = recommendations
         .iter()
@@ -821,16 +813,14 @@ fn draw_about_tab(frame: &mut Frame, area: Rect) {
     //let version = env!("CARGO_PKG_VERSION");
     //let build_time = env!("CLAUDE_TOKEN_MONITOR_BUILD_TIME", "unknown");
     
-    let version_info = vec![
-        "👨‍💻 Author: Chris Phillips, 📧 Email: tools-claude-token-monitor@adiuco.com".to_string(),
+    let version_info = ["👨‍💻 Author: Chris Phillips, 📧 Email: tools-claude-token-monitor@adiuco.com".to_string(),
         "🛠️  Built using: ruv-swarm ⚙️  Language: Rust with Tokio + Ratatui".to_string(),
         "".to_string(),
         "💡 Usage Tips:".to_string(),
         "   • Use --about flag for this information in CLI".to_string(),
         "   • Use --explain-how-this-works for technical details".to_string(),
         "   • Compatible with Claude Code's JSONL output files".to_string(),
-        "   • Passive monitoring - no API keys or authentication required".to_string(),
-    ];
+        "   • Passive monitoring - no API keys or authentication required".to_string()];
 
     let version_items: Vec<ListItem> = version_info
         .iter()
@@ -962,7 +952,7 @@ fn draw_about_tab(frame: &mut Frame, area: Rect) {
         let y_label_1 = format!("{:.0}", max_tokens / 4.0);
         let y_label_2 = format!("{:.0}", max_tokens / 2.0);
         let y_label_3 = format!("{:.0}", max_tokens * 3.0 / 4.0);
-        let y_label_4 = format!("{:.0}", max_tokens);
+        let y_label_4 = format!("{max_tokens:.0}");
 
         // Create dataset for cumulative token usage (main line)
         let cumulative_dataset = Dataset::default()
@@ -1102,7 +1092,7 @@ fn draw_about_tab(frame: &mut Frame, area: Rect) {
             Line::from(vec![
                 Span::raw("Progress: "),
                 Span::styled(
-                    format!("{}%", progress_percent),
+                    format!("{progress_percent}%"),
                     Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
                 ),
             ]),
@@ -1110,7 +1100,7 @@ fn draw_about_tab(frame: &mut Frame, area: Rect) {
             Line::from(vec![
                 Span::raw("Remaining: "),
                 Span::styled(
-                    format!("{}", remaining_tokens),
+                    format!("{remaining_tokens}"),
                     Style::default().fg(Color::White),
                 ),
             ]),
@@ -1213,7 +1203,7 @@ fn draw_about_tab(frame: &mut Frame, area: Rect) {
         let y_label_1 = format!("{:.0}", max_tokens / 4.0);
         let y_label_2 = format!("{:.0}", max_tokens / 2.0);
         let y_label_3 = format!("{:.0}", max_tokens * 3.0 / 4.0);
-        let y_label_4 = format!("{:.0}", max_tokens);
+        let y_label_4 = format!("{max_tokens:.0}");
 
         // Create datasets for different token types (simplified for now)
         let total_dataset = Dataset::default()
@@ -1286,8 +1276,8 @@ fn draw_about_tab(frame: &mut Frame, area: Rect) {
 /// Draw horizontal bar chart for token usage
 fn draw_token_usage_chart(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
     let session = &metrics.current_session;
-    let used = session.tokens_used.max(0) as u64; // Ensure non-negative
-    let remaining = session.tokens_limit.saturating_sub(session.tokens_used.max(0)) as u64;
+    let used = session.tokens_used as u64; // Ensure non-negative
+    let remaining = session.tokens_limit.saturating_sub(session.tokens_used) as u64;
     let usage_percent = if session.tokens_limit > 0 {
         ((used as f64 / session.tokens_limit as f64) * 100.0).min(100.0) as u64
     } else {
@@ -1296,14 +1286,14 @@ fn draw_token_usage_chart(frame: &mut Frame, area: Rect, metrics: &UsageMetrics)
     let remaining_percent = 100u64.saturating_sub(usage_percent); // Safe subtraction
 
     // Use percentage for better visibility, but show actual values in labels
-    let used_label = format!("Used ({})", used);
-    let remaining_label = format!("Remaining ({})", remaining);
+    let used_label = format!("Used ({used})");
+    let remaining_label = format!("Remaining ({remaining})");
     let data = vec![
         (used_label.as_str(), usage_percent.max(1)), // Ensure at least 1 for visibility
         (remaining_label.as_str(), remaining_percent.max(1)), // Ensure at least 1 for visibility
     ];
 
-    let title = format!("Token Usage Distribution ({:.1}% used)", usage_percent);
+    let title = format!("Token Usage Distribution ({usage_percent:.1}% used)");
     
     let barchart = BarChart::default()
         .block(
@@ -1330,7 +1320,7 @@ fn draw_usage_history_chart(frame: &mut Frame, area: Rect, metrics: &UsageMetric
         .split(area);
 
     // Time period usage summary - use safe arithmetic
-    let current_tokens = metrics.current_session.tokens_used.max(0) as u64; // Ensure non-negative
+    let current_tokens = metrics.current_session.tokens_used as u64; // Ensure non-negative
     
     // Better mock data that shows meaningful progression
     let base = current_tokens.max(100); // Ensure we have some baseline
@@ -1383,16 +1373,14 @@ fn draw_usage_history_chart(frame: &mut Frame, area: Rect, metrics: &UsageMetric
 }
     /// Draw detailed current session information
     fn draw_current_session_details(frame: &mut Frame, area: Rect, session: &TokenSession) {
-        let details = vec![
-            format!("Session ID: {}", session.id),
+        let details = [format!("Session ID: {}", session.id),
             format!("Plan: {:?}", session.plan_type),
             format!("Tokens Used: {}", session.tokens_used),
             format!("Token Limit: {}", session.tokens_limit),
             format!("Usage: {:.1}%", (session.tokens_used as f64 / session.tokens_limit as f64) * 100.0),
             format!("Started: {}", humantime::format_rfc3339(session.start_time.into())),
             format!("Resets: {}", humantime::format_rfc3339(session.reset_time.into())),
-            format!("Status: {}", if session.is_active { "Active" } else { "Inactive" }),
-        ];
+            format!("Status: {}", if session.is_active { "Active" } else { "Inactive" })];
 
         let items: Vec<ListItem> = details
             .iter()

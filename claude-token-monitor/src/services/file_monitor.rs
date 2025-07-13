@@ -90,7 +90,7 @@ impl FileBasedTokenMonitor {
         if claude_data_paths.is_empty() {
             log::warn!("No Claude data directories found. Token monitoring may not work correctly.");
         } else {
-            log::info!("Found Claude data paths: {:?}", claude_data_paths);
+            log::info!("Found Claude data paths: {claude_data_paths:?}");
         }
 
         Ok(Self {
@@ -119,7 +119,7 @@ impl FileBasedTokenMonitor {
                 if let Ok(validated_path) = Self::validate_and_canonicalize_path(path_str) {
                     paths.push(validated_path);
                 } else {
-                    log::warn!("Invalid path in CLAUDE_DATA_PATHS: {}", path_str);
+                    log::warn!("Invalid path in CLAUDE_DATA_PATHS: {path_str}");
                 }
             }
         }
@@ -128,7 +128,7 @@ impl FileBasedTokenMonitor {
             if let Ok(validated_path) = Self::validate_and_canonicalize_path(&env_path) {
                 paths.push(validated_path);
             } else {
-                log::warn!("Invalid path in CLAUDE_DATA_PATH: {}", env_path);
+                log::warn!("Invalid path in CLAUDE_DATA_PATH: {env_path}");
             }
         }
         
@@ -182,11 +182,9 @@ impl FileBasedTokenMonitor {
         if let Some(home_dir) = dirs::home_dir() {
             if !canonical_path.starts_with(&home_dir) {
                 // Allow system directories that are commonly used for Claude data
-                let allowed_system_paths = vec![
-                    "/opt/claude",
+                let allowed_system_paths = ["/opt/claude",
                     "/usr/local/share/claude",
-                    "/var/lib/claude",
-                ];
+                    "/var/lib/claude"];
                 
                 let is_allowed = allowed_system_paths.iter()
                     .any(|allowed| canonical_path.starts_with(allowed));
@@ -205,24 +203,24 @@ impl FileBasedTokenMonitor {
         let mut all_entries = Vec::new();
         
         for data_path in &self.claude_data_paths {
-            log::debug!("Scanning directory: {:?}", data_path);
+            log::debug!("Scanning directory: {data_path:?}");
             
             // Find all .jsonl files recursively
             for entry in WalkDir::new(data_path)
                 .into_iter()
                 .filter_map(|e| e.ok())
                 .filter(|e| e.file_type().is_file())
-                .filter(|e| e.path().extension().map_or(false, |ext| ext == "jsonl"))
+                .filter(|e| e.path().extension().is_some_and(|ext| ext == "jsonl"))
             {
                 let file_path = entry.path();
-                log::debug!("Parsing JSONL file: {:?}", file_path);
+                log::debug!("Parsing JSONL file: {file_path:?}");
                 
                 match self.parse_jsonl_file(file_path).await {
                     Ok(mut entries) => {
                         all_entries.append(&mut entries);
                     }
                     Err(e) => {
-                        log::warn!("Failed to parse JSONL file {:?}: {}", file_path, e);
+                        log::warn!("Failed to parse JSONL file {file_path:?}: {e}");
                     }
                 }
             }
@@ -687,7 +685,7 @@ impl FileBasedTokenMonitor {
                 if time_diff > chrono::Duration::hours(1) {
                     if current_group_entries > 0 {
                         file_analysis.push((
-                            format!("session-{}.jsonl", group_index),
+                            format!("session-{group_index}.jsonl"),
                             current_group_entries,
                             current_group_tokens
                         ));
@@ -705,7 +703,7 @@ impl FileBasedTokenMonitor {
             // Add the final group
             if current_group_entries > 0 {
                 file_analysis.push((
-                    format!("session-{}.jsonl", group_index),
+                    format!("session-{group_index}.jsonl"),
                     current_group_entries,
                     current_group_tokens
                 ));
@@ -779,7 +777,7 @@ impl FileBasedTokenMonitor {
         // Watch all Claude data directories
         for path in &self.claude_data_paths {
             watcher.watch(path, RecursiveMode::Recursive)?;
-            log::info!("Watching directory for changes: {:?}", path);
+            log::info!("Watching directory for changes: {path:?}");
         }
         
         // Store watcher in the struct to manage its lifetime properly
