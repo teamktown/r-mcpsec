@@ -506,13 +506,16 @@ impl FileBasedTokenMonitor {
         let mut updated_session = current_session;
         updated_session.tokens_used = total_tokens_used;
         
+        // Generate time-series data points from session entries
+        let usage_history = self.generate_time_series_data(&session_entries, &session_start);
+        
         Some(UsageMetrics {
             current_session: updated_session,
             usage_rate,
             session_progress,
             efficiency_score,
             projected_depletion,
-            usage_history: Vec::new(), // Will be populated in future iterations
+            usage_history,
         })
     }
 
@@ -533,6 +536,60 @@ impl FileBasedTokenMonitor {
         }
     }
 
+    /// Generate time-series data points for chart display
+    fn generate_time_series_data(&self, session_entries: &[&UsageEntry], session_start: &DateTime<Utc>) -> Vec<TokenUsagePoint> {
+        if session_entries.is_empty() {
+            return Vec::new();
+        }
+        
+        let mut time_series = Vec::new();
+        let mut cumulative_tokens = 0u32;
+        
+        // Sort entries by timestamp to ensure proper ordering
+        let mut sorted_entries = session_entries.to_vec();
+        sorted_entries.sort_by_key(|entry| entry.timestamp);
+        
+        // Add starting point at session start with 0 tokens
+        time_series.push(TokenUsagePoint {
+            timestamp: *session_start,
+            tokens_used: 0,
+            session_id: "current".to_string(),
+        });
+        
+        // Process each usage entry to create cumulative data points
+        for entry in sorted_entries {
+            cumulative_tokens += entry.usage.total_tokens();
+            time_series.push(TokenUsagePoint {
+                timestamp: entry.timestamp,
+                tokens_used: cumulative_tokens,
+                session_id: "current".to_string(),
+            });
+        }
+        
+        // If we have multiple points, ensure reasonable spacing for visualization
+        if time_series.len() > 100 {
+            // Sample down to ~50 points for better performance
+            let step = time_series.len() / 50;
+            time_series = time_series
+                .into_iter()
+                .enumerate()
+                .filter(|(i, _)| i % step == 0)
+                .map(|(_, point)| point)
+                .collect();
+            
+            // Always include the last point
+            if let Some(last) = session_entries.last() {
+                time_series.push(TokenUsagePoint {
+                    timestamp: last.timestamp,
+                    tokens_used: cumulative_tokens,
+                    session_id: "current".to_string(),
+                });
+            }
+        }
+        
+        time_series
+    }
+    
     /// Get file sources analysis with token counts
     pub fn get_file_sources_analysis(&self) -> Vec<(String, usize, u32)> {
         // Group entries by file path (approximated from data patterns)

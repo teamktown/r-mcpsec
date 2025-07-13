@@ -12,7 +12,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
-        BarChart, Block, Borders, Cell, Gauge, List, ListItem, Paragraph, Row, Table, Tabs,
+        Axis, BarChart, Block, Borders, Cell, Chart, Dataset, GraphType, Gauge, List, ListItem, Paragraph, Row, Table, Tabs,
         Wrap,
     },
     Frame, Terminal,
@@ -211,13 +211,12 @@ impl RatatuiTerminalUI {
 
     /// Draw overview tab with key metrics
     fn draw_overview_tab(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
-        // Split the top area horizontally for session info and predictions
+        // Split the area vertically for session info and time-series chart
         let vertical_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(10), // Top row: session info + predictions
-                Constraint::Length(6),  // Usage gauge
-                Constraint::Min(6),     // Statistics
+                Constraint::Min(12),    // Time-series strip chart (replaces gauge + statistics)
             ])
             .split(area);
 
@@ -229,16 +228,13 @@ impl RatatuiTerminalUI {
             ])
             .split(vertical_chunks[0]);
 
-        // Left: Session information
-        Self::draw_session_info(frame, top_row_chunks[0], &metrics.current_session);
+        // Left: Session information with filename
+        Self::draw_session_info_with_filename(frame, top_row_chunks[0], &metrics.current_session);
         // Right: Session predictions and recommendations
         Self::draw_session_predictions(frame, top_row_chunks[1], metrics);
 
-        // Usage gauge
-        Self::draw_usage_gauge(frame, vertical_chunks[1], metrics);
-
-        // Statistics table
-        Self::draw_statistics_table(frame, vertical_chunks[2], metrics);
+        // Time-series strip chart (replaces usage gauge and statistics table)
+        Self::draw_token_usage_strip_chart(frame, vertical_chunks[1], metrics);
     }
 
     /// Draw charts tab with bar charts
@@ -842,6 +838,161 @@ fn draw_about_tab(frame: &mut Frame, area: Rect) {
             .wrap(Wrap { trim: true });
 
         frame.render_widget(paragraph, area);
+    }
+
+    /// Draw session info with filename for Overview tab
+    fn draw_session_info_with_filename(frame: &mut Frame, area: Rect, session: &TokenSession) {
+        let plan_str = match &session.plan_type {
+            PlanType::Pro => "Pro (40k tokens)",
+            PlanType::Max5 => "Max5 (20k tokens)",
+            PlanType::Max20 => "Max20 (100k tokens)",
+            PlanType::Custom(limit) => &format!("Custom ({}k tokens)", limit / 1000),
+        };
+
+        let status_style = if session.is_active {
+            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+        };
+
+        let session_info = vec![
+            Line::from(vec![
+                Span::raw("Plan: "),
+                Span::styled(plan_str, Style::default().fg(Color::Cyan)),
+            ]),
+            Line::from(vec![
+                Span::raw("Status: "),
+                Span::styled(
+                    if session.is_active { "ACTIVE (OBSERVED)" } else { "INACTIVE (OBSERVED)" },
+                    status_style,
+                ),
+            ]),
+            Line::from(vec![
+                Span::raw("Session ID: "),
+                Span::styled(&session.id[..12], Style::default().fg(Color::Yellow)),
+            ]),
+            Line::from(vec![
+                Span::raw("JSONL File: "),
+                Span::styled("~/.claude/projects/**/*.jsonl", Style::default().fg(Color::Green)),
+            ]),
+            Line::from(vec![
+                Span::raw("Started: "),
+                Span::styled(
+                    session.start_time.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+                    Style::default().fg(Color::White),
+                ),
+            ]),
+            Line::from(vec![
+                Span::raw("Resets: "),
+                Span::styled(
+                    session.reset_time.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+                    Style::default().fg(Color::White),
+                ),
+            ]),
+        ];
+
+        let paragraph = Paragraph::new(session_info)
+            .block(
+                Block::default()
+                    .title("Observed Session Information")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Blue)),
+            )
+            .wrap(Wrap { trim: true });
+
+        frame.render_widget(paragraph, area);
+    }
+
+    /// Draw time-series strip chart for token usage over time
+    fn draw_token_usage_strip_chart(frame: &mut Frame, area: Rect, metrics: &UsageMetrics) {
+        if metrics.usage_history.is_empty() {
+            // Display fallback message when no data is available
+            let placeholder = Paragraph::new("No token usage data available for time-series chart.\nStart using Claude to see real-time consumption.")
+                .block(
+                    Block::default()
+                        .title("Token Usage Over Time")
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::Yellow)),
+                )
+                .style(Style::default().fg(Color::Gray))
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
+            
+            frame.render_widget(placeholder, area);
+            return;
+        }
+
+        // Convert usage history to chart data points
+        let chart_data: Vec<(f64, f64)> = metrics.usage_history
+            .iter()
+            .enumerate()
+            .map(|(i, point)| (i as f64, point.tokens_used as f64))
+            .collect();
+
+        if chart_data.is_empty() {
+            return;
+        }
+
+        // Calculate bounds for the chart
+        let max_tokens = chart_data.iter().map(|(_, y)| *y).fold(0.0, f64::max);
+        let x_max = (chart_data.len() - 1) as f64;
+        
+        // Create time labels for x-axis
+        let time_labels = if metrics.usage_history.len() > 1 {
+            let start_time = metrics.usage_history.first().unwrap().timestamp;
+            let end_time = metrics.usage_history.last().unwrap().timestamp;
+            vec![
+                format!("{}", start_time.format("%H:%M")),
+                format!("{}", end_time.format("%H:%M")),
+            ]
+        } else {
+            vec!["Start".to_string(), "Now".to_string()]
+        };
+
+        // Create y-axis labels
+        let y_label_1 = format!("{:.0}", max_tokens / 4.0);
+        let y_label_2 = format!("{:.0}", max_tokens / 2.0);
+        let y_label_3 = format!("{:.0}", max_tokens * 3.0 / 4.0);
+        let y_label_4 = format!("{:.0}", max_tokens);
+
+        // Create dataset for cumulative token usage (main line)
+        let cumulative_dataset = Dataset::default()
+            .name("Cumulative Tokens")
+            .marker(ratatui::symbols::Marker::Braille)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::Green))
+            .data(&chart_data);
+
+        // Create chart widget
+        let chart = Chart::new(vec![cumulative_dataset])
+            .block(
+                Block::default()
+                    .title("Token Usage Over Time (Cumulative)")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Green)),
+            )
+            .x_axis(
+                Axis::default()
+                    .title("Time Progression")
+                    .style(Style::default().fg(Color::White))
+                    .bounds([0.0, x_max])
+                    .labels(time_labels.iter().map(|s| s.as_str()).collect::<Vec<_>>()),
+            )
+            .y_axis(
+                Axis::default()
+                    .title("Tokens")
+                    .style(Style::default().fg(Color::White))
+                    .bounds([0.0, max_tokens * 1.1]) // Add 10% padding at top
+                    .labels(vec![
+                        "0",
+                        &y_label_1,
+                        &y_label_2,
+                        &y_label_3,
+                        &y_label_4,
+                    ]),
+            );
+
+        frame.render_widget(chart, area);
     }
 
     /// Draw usage gauge
